@@ -2,6 +2,8 @@ import numpy as np
 import math
 import time
 
+# THIS IS NOT REALLY CORRECT
+# WIP
 # Returns the best Levenshtein distance between array `s` and some array
 # modified by a sequence of edit operations.
 # Costs of insert, delete, and sub operations *for each character* 
@@ -109,6 +111,76 @@ def modified_lev_dist(s, alphabet_size, prob_ins, prob_del, prob_sub, priors):
 
 
     return max(prob[len_s,len_t,:])
+
+# Returns the stochastic edit distance, as defined by Ristad & Yianilos,
+# between array `s` and array `t`.
+# Probabilities of insert, delete, and sub operations *for each character* 
+# must be specified 
+
+def stochastic_edit_dist(s, t, alphabet_size, prob_ins, prob_del, prob_sub):
+
+    # Do some integrity checks on the arguments
+
+    if len(s.shape) != 1 or \
+            len(prob_ins.shape) != 1 or \
+            len(prob_del.shape) != 1 or \
+            len(prob_sub.shape) != 2:
+        raise ValueError("s, prob_ins, and prob_del must be 1D numpy arrays, and prob_sub must be a 2D numpy array.")
+
+    if prob_ins.shape != (alphabet_size,) or \
+            prob_del.shape != (alphabet_size,) or \
+            prob_sub.shape != (alphabet_size, alphabet_size):
+        raise ValueError("Dimensions of prob_ins, prob_del, and prob_sub must correspond to alphabet size.")
+
+    for x in s:
+        if x > alphabet_size-1:
+            raise ValueError("All elements of s must be less than alphabet size.")
+
+    # Should probably also check that probability matrices are normalized,
+    # or normalize them here, but I'm not going to do that yet bc I'm lazy.
+
+    # Ok, now that we've got that out of the way, begin algorithm.
+
+    len_s = s.size
+    len_t = t.size
+
+    # Create numpy array `prob`
+    # prob[i,j] will the stochastic edit distance between s[:i-1] and t[:j-1];
+    # that is, the i-length prefix of s and the j-length prefix of t
+    prob = np.zeros((len_s+1, len_t+1))
+
+    # The first row & column represent the distance between one string
+    # and the empty string. Therefore the transformation must consist of entirely
+    # insert/delete operations. Fill in these cells of the matrix.
+
+    # The probability of empty string -> empty string is 1.
+    prob[0,0] = 1
+
+    # Iterate through the array
+    # For each cell prob[i,j], we will sum 3 probabilities for that square:
+    #   - prob[i-1,j] + prob_del (deleting the last char of source)
+    #   - prob[i,j-1] + prob_ins (inserting the last char of target)
+    #   - prob[i-1,j-1] + prob_sub (substituting last char of target for last char of source)
+
+    for i in range(len_s+1):
+        for j in range(len_t+1):
+
+            if i>0:
+                # Delete operation
+                prob[i,j] += prob[i-1,j]*prob_del[s[i-1]]
+
+            if j>0:
+                # Insert operation
+                prob[i,j] += prob[i,j-1]*prob_ins[t[j-1]]
+
+            if i>0 and j>0:
+                # Sub operation
+                prob[i,j] += prob[i-1,j-1]*prob_sub[s[i-1],t[j-1]]
+            
+
+    print(prob)
+
+    return prob[i,j]
 
 
 
@@ -413,10 +485,27 @@ def test_modified_lev_dist():
     result = modified_lev_dist(s, alphabet_size, prob_ins, prob_del, prob_sub, priors)
     print("Result: "+str(result))
 
+def test_stochastic_edit_dist():
+
+    print('Testing stochastic_edit_dist...')
+
+    s = np.array([2])
+    t = np.array([1])
+    alphabet_size = 4
+    prob_ins = np.array([0.01,0.01,0.01,0.01])
+    prob_del = np.array([0.02,0.02,0.02,0.02])
+    prob_sub = np.array([[0.13,0.03,0.03,0.03],
+                         [0.03,0.13,0.03,0.03],
+                         [0.03,0.03,0.13,0.03],
+                         [0.03,0.03,0.03,0.13]])
+
+    result = stochastic_edit_dist(s, t, alphabet_size, prob_ins, prob_del, prob_sub)
+    print("Result: "+str(result))
+
 
 if __name__ == '__main__':
 
-    test_modified_lev_dist()
+    test_stochastic_edit_dist()
 
     
 
