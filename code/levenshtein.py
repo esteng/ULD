@@ -4,7 +4,9 @@ import time
 
 
 # Returns the probabilities of a sequence of edit operations on a top array `s`
-# which produce a bottom string of length t.
+# which produce a bottom string of length t. 
+# Throughout the code, `ib` stands for `insert bottom` (aka insert), and
+# `it` stands for `insert top` (aka delete).
 # 
 # Arguments:
 #   - top           : top-level array 
@@ -19,11 +21,6 @@ import time
 #   - prob_ib       : probability of insert bottom operations for each character
 #                     GIVEN THAT an insert bottom operation has been chosen. MUST SUM TO 1
 #                       (alphabet_size)
-#   - prob_it       : probability of insert top operations for each character
-#                     GIVEN THAT an insert top operation has been chosen. MUST SUM TO 1
-#                       (alphabet_size)
-#       ^^Actually, after thinking about it, I am not sure that we actually need this one,
-#           if we have a separate op_prob_it parameter.
 #   - prob_sub      : probability of insert bottom operations for each pair of characters
 #                     GIVEN THAT an insert bottom operation has been chosen. Each ROW should sum to 1.
 #                       (alphabet_size x alphabet_size)
@@ -31,25 +28,30 @@ import time
 #                     Each ROW should sum to 1.
 #                       (len_bot, alphabet_size)
 #
-# Throughout the code, `ib` stands for `insert bottom` (aka insert), and `it` stands for
-# `insert top` (aka delete).
+# Note that we do not need a prob_it variable as long as we have a probability of the insert operation
+# in general, since there is never a choice to be made about which character to insert, since it is
+# given in the top string.
+#
+# Returns
+#   - prob          : a 3-dimensional chart containing cumulative probabilities,
+#                     The first dimension corresponds to the length of the top string prefix.
+#                     The second dimension corresponds to the length of the bottom string prefix.
+#                     The third dimension corresponds to the choice of edit operation for the current step.
 
 def noisy_channel(top, len_bot, alphabet_size, op_probs, 
-    prob_ib, prob_it, prob_sub, likelihoods):
+    prob_ib, prob_sub, likelihoods):
 
     # Do some integrity checks on the arguments
 
     if len(top.shape) != 1 or \
             len(prob_ib.shape) != 1 or \
-            len(prob_it.shape) != 1 or \
             len(prob_sub.shape) != 2 or \
             len(likelihoods.shape) != 2:
-        raise ValueError("top, prob_ib, and prob_it must be 1D numpy arrays, and prob_sub and likelihoods must be 2D numpy arrays.")
+        raise ValueError("top and prob_ib must be 1D numpy arrays, and prob_sub and likelihoods must be 2D numpy arrays.")
 
     if prob_ib.shape != (alphabet_size,) or \
-            prob_it.shape != (alphabet_size,) or \
             prob_sub.shape != (alphabet_size, alphabet_size):
-        raise ValueError("Dimensions of prob_ib, prob_it, and prob_sub must correspond to alphabet size.")
+        raise ValueError("Dimensions of prob_ib and and prob_sub must correspond to alphabet size.")
 
     if likelihoods.shape != (len_bot, alphabet_size):
         raise ValueError("likelihoods must be a numpy array of dimensions (len_bot, alphabet_size).")
@@ -62,7 +64,7 @@ def noisy_channel(top, len_bot, alphabet_size, op_probs,
     # but I'm not sure how best to do that given rounding errors.
 
     # Separate op_probs into 3 separate variables
-    op_prob_ib, op_prob_it, op_prob_sub = op_probs
+    op_prob_it, op_prob_ib, op_prob_sub = op_probs
 
     # Begin
 
@@ -76,25 +78,6 @@ def noisy_channel(top, len_bot, alphabet_size, op_probs,
     # prob[i,j,x] contains the probability of generating such a string pair from
     # a sequence of edit operations which ends with operation x.
     prob = np.zeros((len_top+1, len_bot+1, 2*alphabet_size+1))
-
-    # # The first row represents the probabilities for a target string of length j
-    # # given an empty source string prefix. This means a series of insert operations.
-    # prob[0,0,alphabet_size+1:2*alphabet_size+1] = 1
-    # for j in range(1,len_bot+1):
-    #     prev_max = max(prob[0,j-1])
-    #     # The new probabilities are the product of the previous max,
-    #     # the insert probabilities for each segment, and the prior probabilities for the
-    #     # current index for each segment.
-    #     prob[0,j,1:alphabet_size+1] = prev_max * prob_ib * likelihoods[j-1,:] # This is correct
-
-    # # The first column represents the probabilities for an empty target prefix and
-    # # a starting string prefix of length i. This means a series of delete operations.
-    # for i in range(len_top+1):
-    #     prev_max = max(prob[i-1,0])
-    #     # Unlike inserts, there is only one option for delete.
-    #     # Also, we don't need to multiply by the likelihoods because we are not using
-    #     # an actual segment here.
-    #     prob[i,0,0] = prev_max * prob_it[top[i-1]]
 
     # Iterate through the array
     # For each cell prob[i,j,c], we will calculate a list of L probabilities for that square:
@@ -113,9 +96,6 @@ def noisy_channel(top, len_bot, alphabet_size, op_probs,
     for i in range(0,len_top+1):
         for j in range(0,len_bot+1):
 
-            if i==0 and j==0:
-                continue
-
             if i>0:
                 # Insert top operation
                 prob[i,j,0] = sum(prob[i-1,j,:]) * op_prob_it #* prob_it[top[i-1]]
@@ -128,18 +108,20 @@ def noisy_channel(top, len_bot, alphabet_size, op_probs,
                 # Sub operation
                 prob[i,j,alphabet_size+1:2*alphabet_size+2] = sum(prob[i-1,j-1,:]) * op_prob_sub * prob_sub[top[i-1]] * likelihoods[j-1,:]                    
 
-    print(prob)
+    return prob
 
+# Given a Levenshtein chart of the format produced by noisy_channel(),
+# return a corresponding edit sequence.
+#    
+# Deterministic mode (stochastic=False): Returns the most likely edit sequence
+# indicated by the chart
+# 
+# Stochastic mode (stochastic=True): Samples a valid edi sequence according
+# to the probabilities given in the chart
 
-    # Backtrace to get the likeliest sequence (WIP)
-
-    # i = len_top+1
-    # j = len_bot+1
-    # path = []
-    # while i>=0 or j>=0:
-
-
-    return max(prob[len_top,len_bot,:])
+def backtrace(prob, stochastic=True):
+    # TODO
+    pass
 
 
 # Returns the stochastic edit distance, as defined by Ristad & Yianilos,
@@ -563,13 +545,14 @@ def test_noisy_channel_simple():
     alphabet_size = 1
     op_probs = (0.1,0.1,0.8)
     prob_ib = np.array([1])
-    prob_it = np.array([0])
     prob_sub = np.array([[1]])
     likelihoods = np.array([[1],[1]])
 
-    result = noisy_channel(top, len_bot, alphabet_size, op_probs,
-         prob_ib, prob_it, prob_sub, likelihoods)
-    print("Result: "+str(result))
+    result_chart = noisy_channel(top, len_bot, alphabet_size, op_probs,
+         prob_ib, prob_sub, likelihoods)
+    result_prob = sum(result_chart[-1,-1])
+    print("Chart:\n"+str(result_chart))
+    print("Result: "+str(result_prob))
 
 
 if __name__ == '__main__':
