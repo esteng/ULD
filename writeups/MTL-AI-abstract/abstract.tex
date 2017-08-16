@@ -2,8 +2,9 @@
 \usepackage{natbib}
 \usepackage{xcolor}
 \newcommand\tab[1][1cm]{\hspace*{#1}}
-
+\newif\ifcomments
 \commentstrue
+
 \newcounter{note}
 \stepcounter{note}
 \newcommand{\n}[1]{\textcolor{red}{$^{\mathrm{n}}$\footnotemark[\arabic{note}]}\footnotetext[\arabic{note}]{\textcolor{red}{NOTE:
