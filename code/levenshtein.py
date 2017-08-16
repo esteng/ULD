@@ -2,115 +2,145 @@ import numpy as np
 import math
 import time
 
-# THIS IS NOT REALLY CORRECT
-# WIP
-# Returns the best Levenshtein distance between array `s` and some array
-# modified by a sequence of edit operations.
-# Costs of insert, delete, and sub operations *for each character* 
-# must be specified, as well as an array of prior probabilities
-# of each segment for each 
 
-def modified_lev_dist(s, alphabet_size, prob_ins, prob_del, prob_sub, priors):
+# Returns the probabilities of a sequence of edit operations on a top array `s`
+# which produce a bottom string of length t.
+# 
+# Arguments:
+#   - top           : top-level array 
+#                       (n)
+#   - len_bot       : length of bottom-level array 
+#                       ()
+#   - alphabet_size : alphabet size of top & bottom level strings
+#                       ()
+#   - op_probs      : probability of insert bottom, insert top, and substitution
+#                     operations, in that order. MUST SUM TO 1
+#                       (3)
+#   - prob_ib       : probability of insert bottom operations for each character
+#                     GIVEN THAT an insert bottom operation has been chosen. MUST SUM TO 1
+#                       (alphabet_size)
+#   - prob_it       : probability of insert top operations for each character
+#                     GIVEN THAT an insert top operation has been chosen. MUST SUM TO 1
+#                       (alphabet_size)
+#       ^^Actually, after thinking about it, I am not sure that we actually need this one,
+#           if we have a separate op_prob_it parameter.
+#   - prob_sub      : probability of insert bottom operations for each pair of characters
+#                     GIVEN THAT an insert bottom operation has been chosen. Each ROW should sum to 1.
+#                       (alphabet_size x alphabet_size)
+#   - likelihoods   : likelihood of each alphabet character at each position in bottom string.
+#                     Each ROW should sum to 1.
+#                       (len_bot, alphabet_size)
+#
+# Throughout the code, `ib` stands for `insert bottom` (aka insert), and `it` stands for
+# `insert top` (aka delete).
+
+def noisy_channel(top, len_bot, alphabet_size, op_probs, 
+    prob_ib, prob_it, prob_sub, likelihoods):
 
     # Do some integrity checks on the arguments
 
-    if len(s.shape) != 1 or \
-            len(prob_ins.shape) != 1 or \
-            len(prob_del.shape) != 1 or \
+    if len(top.shape) != 1 or \
+            len(prob_ib.shape) != 1 or \
+            len(prob_it.shape) != 1 or \
             len(prob_sub.shape) != 2 or \
-            len(priors.shape) != 2:
-        raise ValueError("s, prob_ins, and prob_del must be 1D numpy arrays, and prob_sub and priors must be 2D numpy arrays.")
+            len(likelihoods.shape) != 2:
+        raise ValueError("top, prob_ib, and prob_it must be 1D numpy arrays, and prob_sub and likelihoods must be 2D numpy arrays.")
 
-    if prob_ins.shape != (alphabet_size,) or \
-            prob_del.shape != (alphabet_size,) or \
+    if prob_ib.shape != (alphabet_size,) or \
+            prob_it.shape != (alphabet_size,) or \
             prob_sub.shape != (alphabet_size, alphabet_size):
-        raise ValueError("Dimensions of prob_ins, prob_del, and prob_sub must correspond to alphabet size.")
+        raise ValueError("Dimensions of prob_ib, prob_it, and prob_sub must correspond to alphabet size.")
 
-    if priors.shape != (s.shape[0], alphabet_size):
-        raise ValueError("priors must be a numpy array of dimensions (len(s), alphabet_size).")
+    if likelihoods.shape != (len_bot, alphabet_size):
+        raise ValueError("likelihoods must be a numpy array of dimensions (len_bot, alphabet_size).")
 
-    for x in s:
+    for x in top:
         if x > alphabet_size-1:
-            raise ValueError("All elements of s must be less than alphabet size.")
+            raise ValueError("All elements of top must be less than alphabet size.")
 
-    # Should probably also check that priors and probability matrices are normalized,
-    # or normalize them here, but I'm not going to do that yet bc I'm lazy.
+    # Should probably also check that likelihoods and probability matrices are normalized,
+    # but I'm not sure how best to do that given rounding errors.
 
-    # Ok, now that we've got that out of the way, begin algorithm.
+    # Separate op_probs into 3 separate variables
+    op_prob_ib, op_prob_it, op_prob_sub = op_probs
 
-    len_s = s.size
-    len_t = len_s # Will need to change this later when I understand things better
+    # Begin
+
+    len_top = top.size
+    # len_bot given
 
     # Create numpy array `prob`
-    # prob[i,j] contains the Levenshtein probabilities between s[:i-1] and a hypothetical
-    # target string t', along with costs for all of the last operations on the string.
-    # that is, the first i characters of s and the first j characters of t'.
-    prob = np.zeros((len_s+1, len_t+1, 2*alphabet_size+1))
+    # prob[i,j] contains the probability of a sequence of edit operations generating
+    # a bottom string of length len_bot from the string top[:i-1], separated over
+    # the last edit operation in the sequence.
+    # prob[i,j,x] contains the probability of generating such a string pair from
+    # a sequence of edit operations which ends with operation x.
+    prob = np.zeros((len_top+1, len_bot+1, 2*alphabet_size+1))
 
-    # The first row represents the probabilities for a target string of length j
-    # given an empty source string prefix. This means a series of insert operations.
-    prob[0,0,alphabet_size+1:2*alphabet_size+1] = 1
-    for j in range(1,len_t+1):
-        prev_max = max(prob[0,j-1])
-        # The new probabilities are the product of the previous max,
-        # the insert probabilities for each segment, and the prior probabilities for the
-        # current index for each segment.
-        prob[0,j,1:alphabet_size+1] = prev_max * prob_ins * priors[j-1,:] # This is correct
+    # # The first row represents the probabilities for a target string of length j
+    # # given an empty source string prefix. This means a series of insert operations.
+    # prob[0,0,alphabet_size+1:2*alphabet_size+1] = 1
+    # for j in range(1,len_bot+1):
+    #     prev_max = max(prob[0,j-1])
+    #     # The new probabilities are the product of the previous max,
+    #     # the insert probabilities for each segment, and the prior probabilities for the
+    #     # current index for each segment.
+    #     prob[0,j,1:alphabet_size+1] = prev_max * prob_ib * likelihoods[j-1,:] # This is correct
 
-    # The first column represents the probabilities for an empty target prefix and
-    # a starting string prefix of length i. This means a series of delete operations.
-    for i in range(len_s+1):
-        prev_max = max(prob[i-1,0])
-        # Unlike inserts, there is only one option for delete.
-        # Also, we don't need to multiply by the priors because we are not using
-        # an actual segment here.
-        prob[i,0,0] = prev_max * prob_del[s[i-1]]
+    # # The first column represents the probabilities for an empty target prefix and
+    # # a starting string prefix of length i. This means a series of delete operations.
+    # for i in range(len_top+1):
+    #     prev_max = max(prob[i-1,0])
+    #     # Unlike inserts, there is only one option for delete.
+    #     # Also, we don't need to multiply by the likelihoods because we are not using
+    #     # an actual segment here.
+    #     prob[i,0,0] = prev_max * prob_it[top[i-1]]
 
     # Iterate through the array
     # For each cell prob[i,j,c], we will calculate a list of L probabilities for that square:
-    #       (with prev_max_del = max(prob[i-1,j,:]),
-    #             prev_max_ins = max(prob[i,j-1,:]),
-    #             prev_max_sub = max(prob[i-1,j-1,:]) )
-    #   - prev_max_del * prob_del[s[i-1]] (deleting the last character of source)
-    #   - prev_max_ins * prob_ins[s[i-1]] * priors[s[i-1],j-1] (inserting the last character of target, for all possible characters)
-    #   - prev_max_sub * prob_sub[s[i-1]] * priors[s[i-1],j-1] (substituting last character of source for last character of target,
-    #                                                                for all possible characters)
-    #       (note: we don't need two cases for this anymore, because the s=t case can be taken care of
-    #        in the substitutions matrix: just put all high probabilities along the diagonal -- or don't, if you want to
-    #        mix things up a little.)
+    #   - sum(prob[i-1,j,:]) * prob_it[top[i-1]] (insert top) (length 1)
+    #   - sum(prob[i,j-1,:]) * prob_ib[top[i-1]] * likelihoods[top[i-1],j-1] (insert top) (length alphabet_size)
+    #   - sum(prob[i-1,j-1,:]) * prob_sub[top[i-1]] * likelihoods[top[i-1],j-1] (substitute) (length alphabet_size)
+    #       (Note: we don't need two cases for substitute anymore, because the s=t case can be taken care of
+    #        in the substitutions matrix.)
 
-    for i in range(1,len_s+1):
-        for j in range(1,len_t+1):
+    # Initialize the first cell
+    # It doesn't matter what the individual values are as long as
+    # the cell sums to 1
+    # So we'll just set the first element to 1
+    prob[0,0,0] = 1
 
-            prev_max_del = max(prob[i-1,j,:])
-            prev_max_ins = max(prob[i,j-1,:])
-            prev_max_sub = max(prob[i-1,j-1,:])
+    for i in range(0,len_top+1):
+        for j in range(0,len_bot+1):
 
-            # Set the probabilities array prob[i,j,:]
-            # First the delete, then the inserts, then the subs
+            if i==0 and j==0:
+                continue
 
-            # deleting the last character of source
-            prob[i,j,0] = prev_max_del * prob_del[s[i-1]] 
+            if i>0:
+                # Insert top operation
+                prob[i,j,0] = sum(prob[i-1,j,:]) * op_prob_it #* prob_it[top[i-1]]
 
-            # inserting the last character of target, for all possible characters
-            prob[i,j,1:alphabet_size+1] = prev_max_ins * prob_ins[s[i-1]] * priors[s[i-1],j-1]
+            if j>0:
+                # Insert bottom operation
+                prob[i,j,1:alphabet_size+1] = sum(prob[i,j-1,:]) * op_prob_ib * prob_ib * likelihoods[j-1,:]
 
-            # substituting last character of source for last character of target, for all possible characters
-            prob[i,j,alphabet_size+1:2*alphabet_size+2] = prev_max_sub * prob_sub[s[i-1]] * priors[s[i-1],j-1]
-            
+            if i>0 and j>0:
+                # Sub operation
+                prob[i,j,alphabet_size+1:2*alphabet_size+2] = sum(prob[i-1,j-1,:]) * op_prob_sub * prob_sub[top[i-1]] * likelihoods[j-1,:]                    
 
     print(prob)
 
 
     # Backtrace to get the likeliest sequence (WIP)
 
-    # i = len_s+1
-    # j = len_t+1
+    # i = len_top+1
+    # j = len_bot+1
     # path = []
     # while i>=0 or j>=0:
 
 
-    return max(prob[len_s,len_t,:])
+    return max(prob[len_top,len_bot,:])
+
 
 # Returns the stochastic edit distance, as defined by Ristad & Yianilos,
 # between array `s` and array `t`.
@@ -502,10 +532,49 @@ def test_stochastic_edit_dist():
     result = stochastic_edit_dist(s, t, alphabet_size, prob_ins, prob_del, prob_sub)
     print("Result: "+str(result))
 
+def test_noisy_channel():
+
+    print('Testing noisy_channel...')
+
+    top = np.array([2,0,1])
+    len_bot = 3
+    alphabet_size = 4
+    op_probs = (0.1,0.1,0.8)
+    prob_ib = np.array([1,1,1,1])
+    prob_it = np.array([0.25,0.25,0.25,0.25])
+    prob_sub = np.array([[0.9,0.01,0.01,0.08],
+                         [0.01,0.9,0.01,0.08],
+                         [0.01,0.01,0.9,0.08],
+                         [0.01,0.01,0.08,0.9]])
+    likelihoods = np.array([[0.01,0.01,0.9,0.08],
+                       [0.01,0.9,0.01,0.08],
+                       [0.9,0.01,0.01,0.08]])
+
+    result = noisy_channel(top, len_bot, alphabet_size, op_probs,
+         prob_ib, prob_it, prob_sub, likelihoods)
+    print("Result: "+str(result))
+
+def test_noisy_channel_simple():
+
+    print('Testing noisy_channel...')
+
+    top = np.array([0])
+    len_bot = 2
+    alphabet_size = 1
+    op_probs = (0.1,0.1,0.8)
+    prob_ib = np.array([1])
+    prob_it = np.array([0])
+    prob_sub = np.array([[1]])
+    likelihoods = np.array([[1],[1]])
+
+    result = noisy_channel(top, len_bot, alphabet_size, op_probs,
+         prob_ib, prob_it, prob_sub, likelihoods)
+    print("Result: "+str(result))
+
 
 if __name__ == '__main__':
 
-    test_stochastic_edit_dist()
+    test_noisy_channel_simple()
 
     
 

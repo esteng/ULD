@@ -6,3 +6,6 @@ writeups/.#.gitignore
 writeups/MTL-AI-abstract/abstract.fdb_latexmk
 writeups/MTL-AI-abstract/abstract.fls
 writeups/MTL-AI-abstract/abstract.pdf
+
+# Ignore search index files generated on Mac
+*.DS_Store
