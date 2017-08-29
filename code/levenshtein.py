@@ -165,7 +165,7 @@ def noisy_channel_backwards(top, len_bot, alphabet_size, op_probs,
     # It doesn't matter what the individual values are as long as
     # the cell sums to 1
     # So we'll just set the first element to 1
-    prob[0,0,0] = 1
+    prob[len_top,len_bot,0] = 1
 
     for i in range(len_top,-1,-1):
         for j in range(len_bot,-1,-1):
@@ -176,11 +176,11 @@ def noisy_channel_backwards(top, len_bot, alphabet_size, op_probs,
 
             if j<len_bot:
                 # Insert bottom operation
-                prob[i,j,1:alphabet_size+1] = sum(prob[i,j+1,:]) * op_prob_ib * prob_ib * likelihoods[j+1,:]
+                prob[i,j,1:alphabet_size+1] = sum(prob[i,j+1,:]) * op_prob_ib * prob_ib * likelihoods[j,:]
 
             if i<len_top and j<len_top:
                 # Sub operation
-                prob[i,j,alphabet_size+1:2*alphabet_size+2] = sum(prob[i+1,j+1,:]) * op_prob_sub * prob_sub[top[i+1]] * likelihoods[j+1,:]                    
+                prob[i,j,alphabet_size+1:2*alphabet_size+2] = sum(prob[i+1,j+1,:]) * op_prob_sub * prob_sub[top[i]] * likelihoods[j,:]                    
 
     return prob
 
@@ -630,10 +630,28 @@ def test_noisy_channel_simple():
     print("Chart:\n"+str(result_chart))
     print("Result: "+str(result_prob))
 
+def test_noisy_channel_back_simple():
+
+    print('Testing noisy_channel_backwards...')
+
+    top = np.array([0])
+    len_bot = 2
+    alphabet_size = 1
+    op_probs = (0.1,0.1,0.8)
+    prob_ib = np.array([1])
+    prob_sub = np.array([[1]])
+    likelihoods = np.array([[1],[1]])
+
+    result_chart = noisy_channel_backwards(top, len_bot, alphabet_size, op_probs,
+         prob_ib, prob_sub, likelihoods)
+    result_prob = sum(result_chart[-1,-1])
+    print("Chart:\n"+str(result_chart))
+    print("Result: "+str(result_prob))
+
 
 if __name__ == '__main__':
 
-    test_noisy_channel_simple()
+    test_noisy_channel_back_simple()
 
     
 
