@@ -39,7 +39,7 @@ import time
 #                     The third dimension corresponds to the choice of edit operation for the current step.
 
 def noisy_channel(top, len_bot, alphabet_size, op_probs, 
-    prob_ib, prob_sub, likelihoods):
+    prob_ib, prob_sub, likelihoods, max_edit=1):
 
     # Do some integrity checks on the arguments
 
@@ -95,7 +95,8 @@ def noisy_channel(top, len_bot, alphabet_size, op_probs,
 
     for i in range(0,len_top+1):
         for j in range(0,len_bot+1):
-
+            if abs(i-j) > max_edit:
+                continue
             if i>0:
                 # Insert top operation
                 prob[i,j,0] = sum(prob[i-1,j,:]) * op_prob_it #* prob_it[top[i-1]]
