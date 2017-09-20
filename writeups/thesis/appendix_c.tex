@@ -1,0 +1,41 @@
+
+
+\section{Derivation of Updates}
+\label{append_c}
+As an example of how variational updates can be found, we show the explicit derivation of the Beta distribution updates for the adaptor grammar portion of the ULD model. 
+
+Recall that in the generative process, each stick-weight proportion $\nu_i$ is drawn from a Beta distribution prior parametrized as $Beta(1-b_A, a_A - ib_A)$. Recall also that our updates take the general form 
+
+\begin{align}
+\label{generic_update}
+\mathbb{E}_q[g_i(Z_{-i}, X, \Phi)] = \mathbb{E}_q \begin{bmatrix} \phi_1 + \sum\limits_{z_n \in Z_{-i}} t(x_n, z_n) \\ \phi_2 + N \end{bmatrix}
+\end{align}
+
+where $\phi_1$ and $\phi_2$ are the parameters of the prior. This implies that in this case, $\phi_1 = 1-b_A$ and $\phi_2 = a_A - ib_A$. The sufficient statistic $t(x_n, z_n)$ is the number of times stick $i$ was the final stick (i.e. the process did not continue after $i$). $N$ is the total number of times any stick was the final one, which is equivalent to the sum over all sticks of $t(x_n, z_n)$. Formally, 
+
+\begin{align}
+\label{nat_params}
+\sum\limits_{z_n \in Z_{-i}} t(x_n, z_n) = \sum\limits_{B \in M} \sum\limits_{k=1}^{N_B} f(A \overset{*}{\rightarrow} s_{A,k}, z_k)
+\end{align}
+which is the sum over all adapted nonterminals of the sum up to the truncation level of that nonterminal (the maximal stick index) of the count of the grammaton expansion of $A$ to the substring $s_{A,k}$ in the derivation tree $z_k$. As mentioned before, 
+
+\begin{align}
+\label{full_N}
+N = \sum\limits_{j=1}^{i-1} \sum\limits_{B \in M} \sum\limits_{k=1}^{N_B} f(A \overset{*}{\rightarrow} s_{A,j}, z_k)
+\end{align}
+
+Putting \eqref{generic_update},\eqref{nat_params}, and \eqref{full_N} together, the full update becomes 
+
+\begin{align*}
+\begin{bmatrix} \gamma^1_{A,i} \\ \gamma^2_{A,i} \end{bmatrix} &= 
+\nonumber \mathbb{E}_q \begin{bmatrix}
+1-b_A + \sum\limits_{B \in M} \sum\limits_{k=1}^{N_B} f(A \overset{*}{\rightarrow} s_{A,k}, z_k) \\ 
+a_A - ib_A + \sum\limits_{j=1}^{i-1} \sum\limits_{B \in M} \sum\limits_{k=1}^{N_B} f(A \overset{*}{\rightarrow} s_{A,j}, z_k)
+\end{bmatrix} \\
+\numberthis &=  \begin{bmatrix}
+1-b_A + \sum\limits_{B\in M} \sum\limits_{k=1}^{N_B} \tilde f \Big(A \overset{*}{\rightarrow} s_{A,k}, s_{B,k}\Big)\\
+a_A + ib_A + \sum\limits_{j=1}^{i-1}\sum\limits_{B\in M}\sum\limits_{k=1}^{N_B} \tilde f\Big(A \overset{*}{\rightarrow} s_{A,j}, s_{B,k}\Big)
+\end{bmatrix}
+\end{align*}
+
+where $\tilde f \Big(r, s_{B,k}\Big)$ is the expected count of rule r in the derivation trees of string $s_{B,k}$ which is headed by nonterminal $B$ and spans $k$ units, and $A \overset{*}{\rightarrow} s_{A,k}$ indicates that non-terminal $A$ expands to the string headed by $A$ and spanning $k$ in its grammaton form \citep{cohen:2010, zhai:2014}.

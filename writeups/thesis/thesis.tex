@@ -1,0 +1,392 @@
+\documentclass[12pt,letterpaper]{article}
+
+\usepackage{amsmath}    
+\usepackage{amssymb}    
+\usepackage{amsthm} 
+\usepackage{color, graphicx}
+\usepackage{enumerate}
+\usepackage{natbib}
+\usepackage{bigints}
+\usepackage[margin=1in]{geometry}
+\usepackage{mathtools}
+\usepackage[ruled, vlined]{algorithm2e}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{hyperref}
+\usepackage{sectsty}
+\usepackage{tabularx}
+
+\sectionfont{\Large}
+\subsectionfont{\large}
+\subsubsectionfont{\normalsize}
+
+
+\newcommand{\simpletree}[4]{
+\begin{tikzpicture}[baseline={(current bounding box.#4)}, level 1/.style={sibling distance=10mm},level 2/.style={sibling distance=10mm}]
+    \node {#1}
+    child { node {#2}}
+    child {node {$\ldots$} edge from parent[draw=none]}
+    child { node {#3}};
+\end{tikzpicture}}
+
+\newcommand\numberthis{\addtocounter{equation}{1}\tag{\theequation}}
+
+\title{\vspace{-4em} \line(10,0){450}\\ Variational Bayesian Inference for Unsupervised Lexicon Discovery\\\vspace{-.7em} \line(1,0){450}}
+\author{Elias Stengel-Eskin, BA\&Sc., Honours Cognitive Science}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Abstract}
+
+Speech is a defining human trait, yet much of our mental framework for producing and processing spoken language remains a mystery. Computational models can help elucidate some these internal structures while allowing us to engineer improved speech technology. We present a variational Bayesian inference model for the fully unsupervised discovery of phones, sub-word units, and words directly from an acoustic input. Extending the state-of-the-art model for unsupervised lexicon discovery introduced by \citet{lee:2015}, which relied on sampling, our framework permits  parallelization and distribution to multiple cores, promising speed improvements and scalability. We give an introduction to variational Bayesian methodology and use it to re-frame the original model. We highlight some results from \citet{lee:2015} which underscore the capabilities of the model, and discuss improvements made to similar models through the application of variational Bayesian methods. With these advances in mind, we consider future experiments made feasible by our variational system and suggest a range potential uses for completely unsupervised language-independent models such as ours. 
+
+\section{Introduction}
+\subsection{Background}
+Spoken language allows humans to communicate effectively with each other, making it a fundamental characteristic of our species. Studying the computational underpinnings of speech production and perception affords us a more extensive understanding of the phenomenon (and of language as a whole) while helping us to develop improved computer-human interactions. Many current state-of-the-art spoken language systems focus on supervised learning\textemdash that is, training a system on copious amounts of labeled data. Producing such data is costly and time-consuming, meaning that sufficient quantities exist only for a small fraction of the world's languages, and even then, the quality is often inadequate. This contributes to the underrepresentation of many world languages and language families, particularly those spoken in the developing world. In addition, a supervised approach does not offer an entirely accurate model of human language capabilities. Language acquisition is unsupervised in the machine-learning sense; we infer linguistic structure and rules implicitly from unlabeled data. These factors motivate an unsupervised approach which incorporates existing theories about language and cognition in order to eliminate the need for labeled training data. The practically unbounded amount of unlabeled speech data which exists in the form of videos, audiobooks, and archival recordings (to name a few sources) particularly incentivizes unsupervised algorithms for speech processing, especially ones that can interface directly with an acoustic signal.  
+
+\subsection{The model}
+The specific language phenomenon we model is lexicon discovery, for which we implement an unsupervised learning algorithm. Extending the state-of-the-art framework introduced by \citet{lee:2015}, our model constructs a complete hierarchy of linguistic units (phonemes, morphemes, and words) directly from an acoustic input. The \textit{unsupervised lexicon discovery} model (ULD) presented by \citet{lee:2015} was the first to jointly model the induction of a full stack of hierarchical components, combining and building on earlier work in phoneme discovery \citep{lee:2012} and in unsupervised syntactic and morphemic structure inference \citep{johnson:2007, odonnell:2015} . ULD is composed of three main components: a Dirichlet process hidden Markov model (DPHMM) for segmenting continuous audio input and hypothesizing a sequence of reusable phone-like units (PLUs), an adaptor grammar which recognizes and stores frequently reused syntactic structures based on an underlying grammar\textemdash in this case, grouping PLUs into morphemes and words\textemdash and finally a noisy channel model, which allows substitutions, insertions, and deletions to occur between the inputs and outputs of the DPHMM and adaptor grammar components, approximating a phonological system. The noisy channel is crucial to the \textit{joint learning} nature of the model in that it allows the DPHMM and adaptor grammar to constrain one another. This type of joint learning framework, whereby multiple linguistic phenomena are modeled simultaneously, has been shown to improve accuracy \citep{johnson:2008}. 
+
+ULD uses nonparametric Bayesian inference to implement a fully unsupervised learning model. In Bayesian modeling, we posit unobserved (latent) variables which are conditionally dependent on the observed data. Defining the model in this way allows for the dynamic updating of the latent variables (the hypothesis) according to the data (the evidence) while incorporating prior theoretical assumptions about the problem, yielding a powerful method for unsupervised learning. 
+
+A Bayesian model is defined as follows: let $Z$ be the set of latent variables, let $X$ be the set of observed data, and let $\Phi$ be a set of static model hyperparameters specified by the user. Then by Bayes' rule we have: $$P(Z|X, \Phi) = \frac{P(X|Z, \Phi)P(Z, \Phi)}{\sum\limits_{ z \in Z} P(X|Z, \Phi)P(Z, \Phi)}$$\\ The numerator is often called the \textit{generative model}, and gives a joint distribution on data and latent variables. In general, we define Bayesian models in terms of a generative model, where draws from the latent random variables are used to generate data. It consists of the conditional probability of the data given the latent variables defining the model (referred to as the \textit{likelihood}), multiplied by the prior probability of the latent variables (known as the \textit{prior}). This gives us an unnormalized measure of the likelihood of generating the data from the model. However, in order to obtain a proper probability we need to divide by a normalizing constant\textemdash the probability of the data. We obtain this probability by integrating (or summing, in the discrete case) over all possible ways of obtaining the data\textemdash that is, all the latent variables. It is easy to see why, given a sufficiently complex model and a large amount of data, evaluating this integral becomes computationally intractable. 
+
+In absence of a method to compute the marginal probability of the data directly, there are two common approaches to doing Bayesian inference. The first, used in the original ULD model, is sampling, which capitalizes on the fact that given a generative model, we can approximate the \textit{posterior} (the left-hand side of Bayes' rule) by randomly sampling from the generative model, eliminating the need to calculate the \textit{marginal likelihood}. This technique has played a major role in Bayesian inference, but is difficult to parallelize. This makes it nearly impossible to scale such algorithms to the types of large speech datasets available \citep{blei:2017}. Variational Bayesian inference presents an often faster alternative for approximating the posterior distribution. 
+
+\subsection{Variational Bayesian inference}
+Variational Bayesian inference re-casts the challenge of computing the posterior distribution on latent variables as an optimization problem. By iteratively maximizing a lower bound on the (incomputable) marginal likelihood, framed as a \textit{variational distribution} over latent variables, the algorithm yields an approximation of the posterior. This intuition is clarified by \hyperref[importantfact]{\eqref{importantfact}}. This strategy lends itself well to parallelization across multiple cores and interfacing with tools such as the MapReduce framework for cluster computation \citep{zhai:2012}. In order obtain the approximation of the posterior, we introduce a family of variational distributions $q_{\nu}(Z)$ which have the same support as the posterior ($p(Z|X, \Phi)$) indexed by variational parameter $\nu$, used to adjust the distribution $q$. 
+
+\subsubsection{Computing the ELBO}
+Our goal is to find the $q_{\nu}(Z)$ which minimizes the Kullback-Liebler (KL) divergence between $q_{\nu}(Z)$ and $p(Z|X, \Phi)$, or $D_{KL}(q_{\nu}(Z) \mid \mid p(Z|X, \Phi))$, where KL-divergence is a measure of the difference between to probability distributions.  KL-divergence is given by 
+\begin{align*}
+  \nonumber D_{KL}(q_\nu (Z) \mid \mid  p(Z\mid X,\Phi)) &= \mathbb{E}_q[\log\ \frac{q_\nu(Z)}{p(Z\mid X,\Phi)}] \\
+ \numberthis &=  \mathbb{E}_q [\log\ q_\nu(Z)] - \mathbb{E}_q [\log\ p(Z,X\mid \Phi)] + \log\ p(X\mid \Phi) 
+\end{align*}
+ where $\mathbb{E}_q$ indicates taking the expected value with respect to $q$ (see \hyperref[expectedvalue]{Appendix A} for further explanation of this notation). Unfortunately, the third value, $\log\ p(X\mid \Phi) $, is the marginal likelihood, requiring the intractable computation we seek to avoid, so we cannot directly compute KL divergence. However, this equation does generate a valuable result: a lower bound on the marginal called the evidence lower bound (ELBO). To obtain this result, first note that because of what KL divergence represents, it can never be negative. This gives us: 
+\begin{align*}
+\nonumber 0 &\leq \mathbb{E}_q [\log\ q(Z)] - \mathbb{E}_q [\log\ p(Z,X \mid \Phi)] + \log\ p(X \mid \Phi)\\
+\nonumber - \log\ p(X \mid \Phi) &\leq \mathbb{E}_q [\log\ q(Z)] - \mathbb{E}_q [\log\ p(Z,X \mid \Phi)]  \\
+\numberthis\log\ p(X \mid \Phi) &\geq \mathbb{E}_q [\log\ p(Z,X \mid \Phi)] - \mathbb{E}_q [\log\ q(Z)] 
+\end{align*}
+Thus \begin{align*}
+ELBO(q) &=  \mathbb{E}_q [\log\ p(Z,X \mid \Phi)] - \mathbb{E}_q [\log\ q(Z)] \\
+&= \mathbb{E}_q [\log\ p(Z,X \mid \Phi)] + H(q) \end{align*}
+where $H(q)$ is the entropy of the distribution $q$.
+This derivation yields an important fact: 
+\begin{align}
+\label{importantfact}
+\log\ p(X\mid \Phi) - D_{KL}(q(Z) \mid \mid  p(Z\mid X \mid \Phi)) = ELBO(q)
+\end{align}
+\eqref{importantfact} provides the explanation to the previous intuition that maximizing the ELBO allows us to minimize the KL divergence\textemdash the maximal ELBO is $\log\ p(X)$. When $ELBO(q) = \log\ p(X \mid \Phi)$ the KL-divergence must be 0 \citep{blei:2017}. For an expanded derivation, as well as an equivalent derivation using Jensen's inequality, see \hyperref[append_a]{Appendix \ref*{append_a}}. 
+
+\subsubsection{Mean-field approximation} 
+One of the fundamental reasons why we cannot compute the posterior directly is the presence of conditional dependencies between latent variables in it\textemdash variables that are independent in the generative process may become conditionally dependent in the posterior. Since the variational distribution need only be an approximation, we make a mean-field assumption\textemdash that is, we assume that the variational distribution $q_{\nu}(Z)$ has none of these conditional dependencies, or 
+\begin{align} \nonumber q_{\nu}(Z) = \prod\limits_{z_i 
+\in Z} q_{\nu_i}(z_i) \end{align}
+This is a powerful assumption allowing us to optimize each variational distribution iteratively. While holding all other variational distributions constant, we can find the variational parameters for $q_{\nu_i}(z_i)$ that maximize the marginal likelihood. By the chain rule, we derive the following lower bound for each variational distribution as:
+\begin{align}
+\mathcal{L}_i(q_{\nu_i}(z_i)) = \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] - \mathbb{E}_q[\log\ q_{\nu_i}(z_i)]
+\end{align} 
+where $Z_{-i}$ indicates the set of all latent variables in $Z$ which are not $z_i$. 
+
+\subsubsection{Updates}
+Recall that the goal is to maximize the lower bound on the variational distribution over each latent variable $\mathcal{L}_i$, which is accomplished by adjusting each $\nu_i$. The value for $\nu_i$ that locally maximizes the function $\mathcal{L}_i$ is found by setting the first derivative with respect to $\nu_i$ equal to 0 and solving for $\nu_i$. Taking the derivative of the objective function is costly; this cost is compounded by the need to recompute the derivative at every parameter update, and for every variational distribution parameter. Using exponential family random variables allows us to take advantage of some convenient mathematical facts and avoid this costly computation entirely. When each $q_{\nu_i}(z_i)$ and each distribution in the generative model are in the exponential family, we obtain the following closed-form update for each $\nu_i$: 
+\begin{align}
+\nu_i = \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)] = \mathbb{E}_q \begin{bmatrix} \phi_1 + \sum\limits_{z_n \in Z_{-i}} t(x_n, z_n) \\ \phi_2 + N \end{bmatrix}
+\end{align}
+where $g_i(Z_{-i}, X, \Phi)$ is a function which gives the natural parameters of the exponential family distribution \textit{in the posterior}, $\phi_1$ and $\phi_2$ are the parameters for the exponential family distribution in the \textit{prior}, $N$ is the total number of datapoints, and $t(x_n, z_n)$ is the \textit{sufficient statistic} of the prior distribution\textemdash in many cases, this is simply a count of occurrences of $z_n$. For a more in-depth explanation of this result, see \hyperref[append_b]{Appendix \ref*{append_b}}. 
+
+\subsubsection{Coordinate ascent}
+We now have a way of optimizing each variational distribution by setting the parameters to the expected value of the natural parameters in the posterior, conditioned on the other latent variables and the data. If the objective function could be formulated as a strictly convex function, then a single update of the variational parameters would be sufficient to find a solution, since a local optimum in a convex function is a global one. However, given the composite nature of most Bayesian models, this is seldom the case, and we use a non-convex optimization algorithm to iteratively find local maxima, with the ultimate goal of converging on the global maximum. The Coordinate Ascent Variational Inference (CAVI) provides an interface for optimizing the ELBO. It is worth noting that the CAVI algorithm is a generalization of the well-known Expectation-Maximization algorithm \citep{dempster:1977}; where the latter gives a point estimate of the posterior, the former returns an approximation of the full distribution\textemdash a more data-rich representation. In CAVI, we alternate between computing the objective function (analogous to the expectation step) and updating the variational parameters (analogous to the maximization step) \citep{neal:1998}.
+
+
+\begin{algorithm}[H]
+initialize each $\nu_i$ \\
+\While{not ELBO converged}{
+    \For{each variational parameter $\nu_i$}{
+        $\nu_i = \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)] $
+    }
+    re-compute ELBO $\mathcal{L}(q) =\mathbb{E}_q [\log\ p(Z,X)] + H(q) $
+}
+\caption{The CAVI algorithm}
+
+\end{algorithm}
+
+The initialization step for each $\nu_i$ can be random, but this is not required. Often, we let $q_{\nu_i}(z_i)$ be a distribution of the same type as in the generative model, and initialize it with uniform or random parameters. However, we may choose the initial parameters more deliberately and encode some bias in the variational distribution, with the caveat (and occasionally the benefit) that varying initializations can lead to convergence on different local optima \citep{blei:2017}
+
+
+
+\section{The Generative Model}
+The ULD generative model can be broken up into roughly three parts: the adaptor grammar, the noisy channel, and the Dirichlet process hidden Markov model (DPHMM). From a top-down perspective, the adaptor grammar parses a sequence of top-level phone-like units (PLUs) into morphemes and words, building a syntactic tree. The noisy channel, using a set of edit operations (insertion, deletion, and substitution) maps the yield of this tree (top-level PLUs) to bottom-level PLUs, modeling some of the phonological processes which occur during speech production. Finally, the DPHMM takes these bottom-level PLUs and finds an acoustic signal (represented by 39-dimensional Mel frequency cepstral coefficient (MFCC) vectors) that could have generated them. It is necessary to point out that this top-down view of the model does not accurately reflect the complete flow of information in it. Due to its joint learning properties, every component affects every other\textemdash for example, the DPHMM first infers the PLU inventory which the adaptor grammar needs to generate trees, and makes adjustments to PLU boundaries which can affect the adaptor grammar's parses. This complex generative model contains a multitude of inference steps, making it an ideal candidate for the application of variational Bayesian methods. The following sections offer more detailed descriptions of each model and their respective latent variables. 
+
+\subsection{Adaptor grammars}
+First developed by \citet{johnson:2007}, adaptor grammars take as input some context-free grammar and a set of strings which can be parsed by that grammar. Using a non-parametric distribution, they adjust the probability of different rule expansions in the context free grammar, thereby storing derivational trees while biasing the reuse of frequently occurring ones; these stored fragments reveal patterns in the linguistic structure of the data. By increasing the likelihood of reusing a tree according to its frequency, adaptor grammars instantiate a ``rich get richer'' dynamic where common trees become more likely than rare ones. In ULD, we use adaptor grammars to group discovered PLUs into morphemes and words. Before formally defining adaptor grammars, we need to define context free grammars, probabilistic context free grammars, and the Pitman-Yor Process.
+
+\subsubsection{Context-free Grammars and probabilistic context-free grammars}
+A context-free grammar (CFG) is a tuple $(N, E, R, S)$ where $N$ is a set of nonterminals symbols, $E$ is a set of terminal symbols disjoint from $N$, and $R$ is a set of rules of the form $A \rightarrow \beta$ where $A \in N$ and $\beta \in (N \cup E)*$ (i.e. any concatenation of symbols in $N$ and $E$). We constrain the CFGs to be in Chomsky normal form, meaning every rule is either of form $A \rightarrow a$ where $a \in E$ or $A \rightarrow BC$ where $B\in N$ and $C\in N$. Note that any CFG without epsilon productions (rules that go to the empty string) can be rewritten in Chomsky normal form. \citep{hopcroft:2006}  
+
+Similar to a CFG, a probabilistic context-free grammar (PCFG) is a tuple $(N, E, R, S, \theta)$ where $N,E,R,S$ are the same as in a CFG, and $\theta$ is a set of probability vectors such that $\sum\limits_{A\rightarrow \beta \in R_A} \theta_{A\rightarrow \beta} = 1$, where $R_A$ is the set of rules which have nonterminal $A$ on the left-hand side. 
+
+\subsubsection{Pitman-Yor Process}
+The Pitman-Yor process \citep{pitman:1997} can be thought of as a distribution on infinite-sided dice, or as generating a partition of integers. Perhaps more intuitively, a Pitman-Yor process defines a distribution over distributions\textemdash each draw from a Pitman-Yor process is itself a countably infinite distribution. There are multiple equivalent ways of defining a Pitman-Yor process; we use the stick-breaking construction, as it provides an iterative definition. Given a scale parameter $a$, a discount factor $b$ and a base distribution $G_0$, a Pitman-Yor process which partitions $[0,1]$ into countably infinite segments is defined by algorithm \hyperref[pyp]{\ref*{pyp}}:
+
+\begin{algorithm}[H]
+\For{$i\in \{1,\ldots\}$}{
+    draw $\nu_i \sim Beta(1-b, a + ib)$ \\
+    sample atom $z_i \sim G_0$\\
+    define $\pi_i \overset{\Delta}{=} \nu_i \prod\limits_{j=1}^{i-1} (1-v_j)$\\
+}
+define $G(z) \overset{\Delta}{=} \sum\limits_{i=1}^\infty \pi_i \delta(z_i, z)$ \emph{where $\delta(z_i,z) = 1$ if $z_i = z$, $0$ otherwise}\\
+\caption{The Pitman-Yor process}
+\label{pyp}
+\end{algorithm} \citep{sethuraman:1994}
+
+Recall that a draw from a Beta distribution is a biased coin. Intuitively, each $\nu_i$ is a coin that gives the probability of stopping at that stick, and $1-\nu_i$ is the probability of continuing to the next stick. Thus $\nu_i$ is the portion of the stick that we ``break off'' and $1-\nu_i$ is the remaining length of the stick, from which we break off $\nu_{i+1}$ (hence the name of this representation). $\pi_i$, the probability of being at stick $i$, is equivalent to the product of the probability of having passed sticks $1,...,i-1$ and the probability of stopping at stick $i$. The parameters $a,b$ control the concentration and spread of the distribution, determining whether most of the mass will be concentrated on a few sticks or spread out over many. $G(z)$ then gives the probability of a distribution $z$ with the support as the base distribution $G_0$. 
+
+\subsubsection{Adaptor grammar definition}
+With these components, we can formally define an adaptor grammar as a tuple $(G, M, a, b, \alpha)$ where $G$ is a CFG, $M$ is a set of \textit{adapted nonterminals}, $a$ and $b$ are Pitman-Yor process parameters, and $\alpha$ is a set of Dirichlet distribution parameters indexed by each nonterminal in $N$. The adaptor grammar employs the Pitman-Yor process to generate a distribution over tree fragments (called grammatons) which biases the reuse of common fragments, increasing the probability of stopping at the stick associated with the grammaton when it appears. To formally define an adaptor grammar, let $A_1,\ldots,A_k$ be a reverse topological sorting of the adapted nonterminals in $M$, such that for all $A_j \in M$ the children of $A_j$ come before $A_j$ in the ordering. Relying on this ordering, algorithms \hyperref[algorithm3]{\ref*{algorithm3}} and \hyperref[algorithm4]{\ref*{algorithm4}} give a formal definition of the adaptor grammar generative process.
+\input{ag}
+
+This definition of adaptor grammars gives us the following latent variables: 
+\begin{itemize}
+\item $z_i$: the full derivational trees that yielded the data. 
+\item $z_{A,i}$: the stored sub-trees headed by adapted non-terminals
+\item $\nu$: the set of stick-weight proportions for the Pitman-Yor process
+\item $\theta$: the set of PCFG rule probabilities 
+\end{itemize}
+Our inference problem can be formalized as finding the posterior distribution on full derivational trees $z_i$\textemdash these depend on all the other latent variables, and reveal the inferred underlying linguistic structure. However, this inference is over an extremely large set of latent variables. In fact, in the current formalization, we cannot do inference over this set of latent variables, since some are countably infinite. To make this problem finite, we use a truncated stick-breaking representation, where after a sufficiently large $i$ we let $\nu_i = 1$, so that the probability of continuing past that stick is 0. Beyond the large number of latent variables, we need to take into account the potentially exponential number of possible parses for each sentence given the grammar. Indeed, averaging rule probabilities over all of these parses is the most costly portion of the algorithm. 
+
+\subsection{Dirichlet process hidden Markov model}
+The goal of the DPHMM is to jointly learn the phonetic boundaries of the speech input, clusters of acoustically similar segments, and PLU identities. By using a Dirichlet process, we do not bound the number of possible PLUs, but the reuse of existing PLUs is preferred (as in the adaptor grammar model). In the original model, defined by \citet{lee:2012}, a sampling approach was used. Extending this work, \citet{ondel:2016} implemented the model using variational Bayesian techniques. To describe the model, we first need to provide background on hidden Markov models and Gaussian mixture models.
+\subsubsection{Hidden Markov Models}
+A hidden Markov model (HMM) consists of a finite number of states combined with probability distribution over transitioning between states, dependent on the previous state. Observations are generated by such transitions, and the probability of emitting a certain observation is defined by a distribution which depends on the current state \citep{rabiner:1986}. In the case of the DPHMM model, each PLU is modeled by its own three-state HMM, corresponding to the start, middle, and end of a phone. Each emission distribution is modeled by a Gaussian mixture model. 
+\subsubsection{Gaussian Mixture Models}
+A multimodal continuous distribution can be modeled by a linear combination (mixture) of Gaussian distributions. Each Gaussian is known as a \textit{component} with a mean $\mu_k$ and a covariance $\Sigma_k$. In order to combine several Gaussians, we need \textit{mixing coefficients} $\pi_k$ such that $\sum\limits_{k=1}^K \pi_k = 1$. Using these coefficients, we choose a Gaussian distribution and then sample a datapoint from its probability density function. The probability of datapoint $x$ in a GMM is\\ \begin{align}\nonumber p(x) = \sum\limits_{k=1}^K \pi_k \mathcal{N}(x|\mu_k, \Sigma_k) \end{align} \citep{bishop:2006}\\
+From this, it is clear that the greater the mixing coefficient, the more often that component is chosen. 
+\subsubsection{The DPHMM generative model}
+The DPHMM generative model first chooses a PLU label, or cluster, from the Dirichlet process. This cluster is associated with an 3-state HMM giving the start, beginning, and end of the phone. Sampling from the Gaussian mixture models at each state of the HMM produces a vector of MFCCs corresponding to the acoustic signal of the chosen PLU. Algorithm \hyperref[dphmm-algo]{\ref*{dphmm-algo}} gives a formal representation of this process: 
+
+\begin{figure}[h]
+\begin{algorithm}[H]
+\emph{\# Defining the mixture models\\}
+choose the GMM mixture weights $\pi \sim Dir(\eta_0^{gmm})$\\
+choose mean $\mu$, and covariance matrix $\Sigma$ with diagonal $\lambda$ by drawing from the Normal-Gamma distribution parametrized by normal distribution hyper-parameters $\mu_0$ and $(\kappa_0\lambda)^{-1}$, and Gamma distribution hyper-parameters $\alpha_0, \beta_0$. \\
+
+\emph{\# Defining the HMM transition matrix\\}
+choose the rows of the transition matrix $r_i \sim Dir(\eta_0^{hmm,i})$\\
+
+\emph{\# Sampling $M$ possible PLUs\\}
+\For{$i \in \{1,\ldots, M\}$}{
+    sample $\nu_i \sim Beta(1, \gamma)$\\
+    sample cluster label $\theta_i \sim G_0$, the Dirichlet process base distribution\\
+}
+\emph{\# Sampling $N$ datapoints\\}
+\For{$i \in \{1,\ldots,N\}$}{
+    choose an cluster label $\theta_i$ with probability $\pi_i(\nu) =  \nu_i \prod\limits_{j=1}^{i-1} (1-v_j)$ \\
+    \emph{\# cluster labels correspond to HMMs}\\
+    sample a path $S = s_1, \ldots, s_n$ from the transition probability distribution\\
+    \For{$s_j \in S$}{
+        choose a Gaussian component from mixture model\\
+        sample datapoint from Gaussian density function\\
+    }
+}
+\caption{Defining the DPHMM}
+\label{dphmm-algo}
+\end{algorithm}
+
+\end{figure}
+This model has three sets of latent variables: 
+\begin{itemize}
+\item $c_i$: the cluster assignment of the $i^{th}$ segment in the dataset
+\item $s_{ij}$: the HMM state of the $j^{th}$ frame for the $i^{th}$ segment
+\item $m_{ij}$: the GMM component of the $j^{th}$ frame for the $i^{th}$ segment
+\end{itemize}
+
+
+\subsection{The noisy channel}
+The final component to the joint model, the noisy channel, allows the DPHMM and adaptor grammar to interface by rewriting each other's outputs. For example, if there is a mistake in the acoustic input or in the DPHMM cluster assignment, the adaptor grammar could fix this by substituting in a more probable PLU. The ability to make such edits is crucial when the acoustic signal is coupled with some amount of noise. The full set of operations the noisy channel allows is: substitution, insertion, and deletion. These are the same exact operations as in the well-known \textit{Levenshtein distance} algorithm \citep{levenshtein:1966}, a dynamic programming algorithm typically used to find the minimum edit distance between two strings\textemdash that is, the minimum number of insertions, deletions, and substitutions required to rewrite one string as the other. To define a noisy channel, we leave the second string unspecified, and use the Levenshtein framework to enumerate all possible strings that the first string could be edited into. To maintain the plausibility of our model, we limit the number of consecutive insertions and deletions at 2, and strongly bias making no edit at all. This makes intuitive sense, as all communication would break down were a speaker to substitute every phoneme he intended to produce, insert an arbitrary number of extra ones, or delete all of them. The following prior probabilities are needed to define this model: 
+\begin{itemize}
+    \item operation probabilities $o$: this is a vector specifying the probability of doing an insertion, deletion, or substitution at all. It is drawn from a Dirichlet distribution.
+    \item probability of inserting each phone $I$: given an alphabet of length $k$, we draw a vector from a Dirichlet distribution which specifies the probability of inserting that phone into the produced string (assuming that insertion has already been picked)
+    \item probability of substitution $\zeta$: since each phone can be substituted for each other phone, this is a $k\times k$ matrix where each row sums to 1. Thus, we draw each row from a $k$-dimensional Dirichlet distribution. 
+\end{itemize}
+
+These three random variables also comprise the set of latent variables in the noisy channel model. 
+
+\section{Variational Updates}
+Having defined the model, we need to construct variational distributions which approximate the posterior for each latent variable. The full set of latent variables, listed with the hyperparameters of their prior distributions and the name of the variational parameter indexing its variational distribution $q$ (if applicable) is given in \hyperref[latent]{Table \ref*{latent}} . Note that the variational implementation of the DPHMM follows a slightly different paradigm, so we refer the reader to \citet{ondel:2016} for a full description of the variational parameter updates and derivations. 
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|c|X|X|X|X|}
+\hline
+Latent variable & Description & variational parameter & hyperparameter \\
+\hline \hline
+\textbf{Adaptor grammar} \\
+\hline \hline
+$z_i$ & the full derivational trees that yielded the data &  $\phi $ & \\
+\hline 
+$z_{A,i}$ & the stored sub-trees headed by adapted non-terminals &  $\phi_A$ & \\
+\hline
+$\nu$& the set of stick-weight proportions for the Pitman-Yor process& $\gamma^1, \gamma^2$ &$a,b$ \\
+\hline
+$\theta$&  the set of PCFG rule probabilities & $\tau$ & $\alpha$ \\
+\hline
+\textbf{DPHMM} \\
+\hline \hline 
+$c_i$ & the cluster assignment of the $i^{th}$ segment in the dataset & &  $\gamma$ \\ 
+\hline
+$s_{ij}$ & the HMM state of the $j^{th}$ frame for the $i^{th}$ segment & &  $\eta_0^{hmm}, G_0$ \\
+\hline
+$m_{ij}$ & the GMM component of the $j^{th}$ frame for the $i^{th}$ segment & &   $\mu_0, (\kappa_0\lambda)^{-1}, \eta_0^{gmm}$ \\
+\hline
+\textbf{Noisy channel}\\
+\hline \hline
+$o$& the operation probabilities&  $\xi^{ops}$ &  $\varepsilon^{ops}$ \\
+\hline
+$I$& the insertion probabilities& $\varphi^{ins}$&  $\varsigma^{ins}$\\
+\hline 
+$\zeta$& the substitution probabilities& $\sigma$  & $\rho $\\
+\hline
+\end{tabularx}
+\caption{latent variables with their respective variational parameters and hyperparameters}
+\label{latent}
+\end{table}
+
+\subsection{Adaptor grammar updates}
+The updates for the adaptor grammar are given as in \citet{cohen:2010}: 
+\begin{align*}
+\gamma^1_{A,i} &= 1-b_A + \sum\limits_{B\in M} \sum\limits_{k=1}^{N_B} \tilde f \Big(A \overset{*}{\rightarrow} s_{A,k}, s_{B,k}\Big)\\
+\gamma^2_{A,i} &= a_A + ib_A + \sum\limits_{j=1}^{i-1}\sum\limits_{B\in M}\sum\limits_{k=1}^{N_B} \tilde f\Big(A \overset{*}{\rightarrow} s_{A,j}, s_{B,k}\Big)\\
+\tau_{A, A\rightarrow \beta} &= \sum\limits_{B\in M}\sum\limits_{k=1}^{N_B} \tilde f\big(A \rightarrow \beta, s_{B,k}\big)\\
+\phi_{A,A \overset{*}{\rightarrow} s_{A,k}} &= \Phi(\gamma^1_{A,i}) - \Phi(\gamma^1_{A,i}  + \gamma^2_{A,i}) + \sum\limits_{j=1}^{i-1}\big(\Phi(\gamma^1_{A,i}) - \Phi(\gamma^1_{A,i}  + \gamma^2_{A,i}) \big) \\
+\phi_{A, A\rightarrow \beta} &= \Phi(\tau_{A,A\rightarrow \beta}) - \Phi(\sum\limits_{\beta} \tau_{A,A\rightarrow \beta})\\
+\end{align*}
+
+where $\tilde f \Big(r, s_{B,k}\Big)$ is the expected count of rule r in the derivation trees of string $s_{B,k}$ which is headed by nonterminal $B$ and spans $k$ units, and $A \overset{*}{\rightarrow} s_{A,k}$ indicates that non-terminal $A$ expands to the string spanning $i$ and corresponding to the yield of the grammaton headed by $A$. In \citet{cohen:2010} the value $\tilde f \Big(r, s_{B,k}\Big)$ is computing using the inside-outside algorithm and a preprocessing step to determine $s_{B,k}$. However, in the implementation proposed in \citet{zhai:2014}, this preprocessing step is avoided by sampling an approximating PCFG. In fact, the \citet{zhai:2014} model uses sampling to approximate both the tree fragments $z_{A,i}$ and the full tree derivations $z_i$. Counter-intuitively, this speeds up the model, despite the sampling approach being slower in the general case. This speed increase emerges from the fact that the expectation and maximization steps of the CAVI algorithm can be equivalently defined in terms of local and global latent variables. Local variables, such as the stick-weight proportions and rule weights, must be computed for each data point. Global variables, like the set of derivation trees $z_i$, need to take all of these variables into account. The expectation step involves optimizing the global variables, while the maximization step optimizes the local variables. This second optimization can be easily distributed across multiple cores. However, the optimized local variables need to be collected again in order to recalculate the global variables in the expectation step; this portion of the algorithm is not easily parallelizable. Furthermore, in the original variational model, the run time was dominated by the Inside-Outside algorithm for calculating expected values of rule counts, which has a time-complexity of $O(|N|^2 |x_i|^3 + |N|^3|x_i|^2)$ where $|x_i|$ is the length of the $i^{th}$ input sequence \citep{cohen:2010}. By using sampling, \citet{zhai:2014} avoid some of the cost involved in this computation. We incorporate this faster implementation into the ULD framework.
+
+ For an example derivation of a variational update see Appendix \ref{append_c}. 
+
+\subsection{Noisy channel updates}
+Let $S$ be the set of all input strings to the noisy channel, let $PLU(i)$ indicate the PLU with index $i$, and let $O(i)$ indicate the operation indexed by $i$. Let $\tilde g(op[p], s_n)$ be the expected number of times an operation $op$ (which can be insertion or substitution) is applied to PLU parameter(s) $p$ in the string $s_n$. Note the overloaded call to $op[p]$ in the case of substitution, where it takes two parameters. The expected count $\tilde g$ can be computing using a Forward-Backward style algorithm which sums over all entries in the expanded Levenshtein chart. With this value, we can derive the updates for the noisy channel's variational distributions, using \eqref{expectation_of_g}. They are:
+\begin{align*}
+\nonumber \xi^{ops}_i &= \varepsilon^{ops}_i + \sum\limits_{s_n \in S}\sum\limits_{l = 1}^k \tilde g\Big(\big( O(i)[PLU(l)]\big), s_n\Big) \\
+\nonumber \phi^{ins}_i &= \varsigma^{ins}_i + \sum\limits_{s_n \in S} \tilde g\Big(ins\big[PLU(i)\big], s_n\Big)\\
+\nonumber \sigma_{i,j} &= \rho_{i,j} + \sum\limits_{s_n \in S} \tilde g\Big(sub\big[PLU(i), PLU(j)\big], s_n\Big)
+\end{align*}
+
+\section{Summary of previous results}
+\citet{lee:2015} ran several variants of the ULD model on a set of lecture recordings from the MIT lecture corpus. These were: a full model where the number of distinct PLU types was inferred from the data, a truncated model where the PLU inventory size was upper-bounded by 50, a lesioned version where the acoustic model (the DPHMM component) was removed after discovering the initial PLU labels and boundaries, meaning that the joint model could no longer relabel or re-segment PLUs, and finally a version were the noisy channel and acoustic model were removed, splitting the joint model into two separate parts. 
+\subsection{Phone segmentation results}
+The phone segmentation produced by the joint model was evaluated against forced alignments of each lecture, with a $20ms$ tolerance margin (i.e. anything within $20ms$ of the force-aligned gold standard would be considered correct). Note that forced alignment\textemdash aligning a transcription of an audio recording with the actual audio by determining word and phone boundaries\textemdash is error-prone, so the gold standard against which \citet{lee:2015} evaluated their results most likely contained misaligned segments. The F1-score values reported by \citet{lee:2015} for phone segmentation, which can be seen in \hyperref[table1]{Table \ref*{table1}}, show similar values for both the inferred PLU inventory system (FullDP) and the limited PLU inventory system (Full50), as well as the DPHMM system used to initialize the phone boundaries in the FullDP system, and the hierarchical hidden Markov model (HHMM) used to initialize the Full50 system. 
+\begin{table}
+\begin{tabular}{|l|c|c||c|c|}
+\hline
+Lecture topic&Full50&HHMM&FullDP&DPHMM\\
+\hline \hline
+Economics&74.4&74.6&74.6&75.0\\
+\hline
+Signal processing&76.2&76.0&76.0&76.3\\
+\hline
+Clustering&76.6&76.6&77.0&76.9\\
+\hline
+Speaker adaptation&76.5&76.9&76.7&76.9\\
+\hline
+Physics&75.9&74.9&75.7&75.8\\
+\hline
+Linear algebra&75.5&73.8&75.5&75.7\\
+\hline
+
+\end{tabular}
+\caption{F1 scores for phone segmentation for each system and their respective initialization systems \protect\citep{lee:2015}}
+\label{table1}
+\end{table}
+
+\subsection{Word segmentation}
+As \citet{lee:2015} mention, due to the lack of a gold standard alignment of the audio used in the experiments, defining and measuring word segmentation presents its own challenges.  \hyperref[table2]{Table \ref*{table2}} shows F1 scores for the word segmentation task for both the truncated and the full PLU inventory systems run by \citet{lee:2015}. These results show that the noisy channel was important for word segmentation\textemdash intuitively, this makes sense, as words of the same type but with different surface realizations cannot be labeled as the same if the noisy channel is not able to make edits accommodating the variation. The $1.6\%$ average improvement between the full system and the -AM lesioned version suggests that the joint learning nature of the model has a small positive effect on word segmentation.
+
+\citet{lee:2015} also evaluated the number of top 20 \textit{term frequency-inverse document frequency} (TFIDF) words (a commonly-used measure of word importance in a set of documents) that the various systems identified. These values are reported in comparison with the number of terms identified by a baseline system \citep{park:2008} and a state-of-the-art system \citep{zhang:2013}, the latter of which uses a much richer representation for audio data than the MFCCs used in ULD. As can be seen in  \hyperref[table3]{Table \ref*{table3}}, both ULD systems frequently outperformed both the baseline and the state-of-the-art system, despite using a sparser data format to represent the audio than \citet{zhang:2013}. 
+
+
+\begin{table}
+\begin{tabular}{|l||c|c|c||c|c|c|}
+\hline
+Lecture topic&Full50&-AM&-NC&FullDP&-AM&-NC \\
+\hline \hline
+Economics&15.4&15.4&14.5&16.1&14.9&13.8\\
+\hline
+Signal processing&17.5&16.4&12.1&18.3&17.0&14.5\\
+\hline
+Clustering&16.7&18.1&15.9&18.4&16.9&15.2\\
+\hline
+Speaker adaptation&17.3&17.4&15.4&18.7&17.6&16.2\\
+\hline
+Physics&17.7&17.9&15.6&20.0&18.0&15.2\\
+\hline
+Linear algebra&17.9&17.5&15.4&20.0&17.0&15.6\\
+\hline
+
+\end{tabular}
+\caption{F1 scores for word segmentation by each system and its lesioned versions\protect\citep{lee:2015}}
+\label{table2}
+\end{table}
+
+\begin{table}
+\begin{tabular}{|l||c|c|c||c|c|c||c|c|}
+\hline
+Lecture topic&Full50&-AM&-NC&FullDP&-AM&-NC&Park\&Glass&Zhang\\
+\hline \hline
+Economics&12&4&2&12&9&6&11&14\\
+\hline
+Signal processing&16&16&5&20&19&14&15&19\\
+\hline
+Clustering&18&17&9&17&18&13&16&17\\
+\hline
+Speaker adaptation&14&14&8&19&17&13&13&19\\
+\hline
+Physics&20&14&12&20&18&16&17&18\\
+\hline
+Linear algebra&18&16&11&19&17&7&17&16\\
+\hline
+\end{tabular}
+\caption{Number of top 20 TFIDF words discovered by each system \protect\citep{lee:2015}}
+\label{table3}
+\end{table}
+
+\subsection{Qualitative results}
+In addition to these quantitative values, \citet{lee:2015} report several qualitative results. For example, the ULD system discovered words such as \textit{globalization} and \textit{collaboration} which occurred frequently in the lectures; for both of these words, the system also discovered the productive \textit{-ation} suffix. Because the purpose of adaptor grammars is to compactly store parse trees, certain frequently occurring morphemes like \textit{-able} and \textit{-ation} were saved. Simultaneously, certain sequences of words, like \textit{the Arab Muslim word}, were identified as lexical items if they were common enough in the data. This calls into question the usefulness of word accuracy in evaluating an unsupervised system like ULD. There are sequences of words (such as some idioms) that almost always occur in that order, especially in a given context. Such collocations might reasonably be considered one lexical item by a language learner presented with only an acoustic input. For example, the grouping of two lexical items into one can be seen in the common malapropism \textit{for all intensive purposes}. It is not impossible then that either through a misunderstanding, or due to the relative frequency of a phrase, we treat a sequence of words as one stored unit. Since our own storage and production process for lexical items is unclear, and, in the case of some idioms and multi-word units, independent of orthographic word boundaries, there is no definitive way of knowing how closely the discovered lexicon corresponds to our internal one. 
+
+Such considerations tie closely into the overall linguistic question of balancing productivity and reuse; namely, how much of our language do we compute on the fly (productively) and how much do we store and reuse statically. Both productivity and reuse have their costs and benefits: computing everything is inefficient, especially for high-frequency terms, but it lets us avoid storing anything; storing everything, on the other hand, makes it very efficient to produce sentences and terms that have already been used, but precludes the creation of novel sentences or terms, and entails storing sentences which are never reused. The optimal solution is to reuse those linguistic units which occur often, and compute those larger ones which are rare or unique. By modeling this balancing act mathematically with the Pitman-Yor and Dirichlet processes, ULD offers a rare glimpse at the internal mechanism of a productivity-reuse system. As the storage of super-word units in the results of \citet{lee:2015} shows, the optimal balance may not dovetail perfectly with our conception of the units in question. 
+
+\section{Variational improvements}
+Given the faster convergence rate and multiprocessing capabilities of our variational ULD framework, more experiments can be run in a shorter time-frame, and the system scales to large audio corpora. The following data shows the improvements that variational systems made over sampling approaches for both the DPHMM and adaptor grammar components of the ULD model. 
+
+\subsection{DPHMM improvement}
+\citet{ondel:2016} found that the variational was both faster and more accurate than the same model using Gibbs sampling. While training the latter took approximately 11 hours on one core, it took less than 30 minutes to train the variational DPHMM on 300 cores. Additionally, the variational model had a better mutual information score between discovered phones and previously labeled phones. 
+
+\subsection{Adaptor grammar improvement}
+\citet{cohen:dissertation} replicated the word-segmentation experiments run by \citet{johnson:2008}, and found that the variational system converged in fewer iterations (full passes through the dataset). While the sampling algorithm took 2000 iterations to converge, the variational system only needed 40. In addition, the variational system was faster when run on multiple cores. Inference by sampling took 2 hours and 14 minutes. The variational adaptor grammar needed 2 hours and 34 minutes when run on a single core\textemdash however, once distributed to 20 cores, it finished in 47 minutes. 
+
+\section{Future Work}
+With this variational implementation of ULD, we plan on running experiments which test lesioning different parts of the model; in \citet{lee:2015}, the acoustic model was removed, and then the noisy channel was further removed from that lesioned version. We are particularly interested in ablating the noisy channel but keeping the acoustic model in place, which would allow the DPHMM to continue relabeling and re-segmenting PLUs, but limit its interface with the adaptor grammar. A variational model also inherently creates novel opportunities for experimentation. Recall that in the variational setting, we introduce a family of new distributions indexed by parameters which can be initialized randomly, but can also be given deliberately chosen values. Testing different initializations can potentially reveal more about the phenomena being modeled while providing useful intuitions for future work. Additionally, the empirical Bayesian framework implemented in both \citet{zhai:2014} and \citet{ondel:2016} not only optimizes the variational parameters, but also finds the best value for the hyperparameters of the model, which can play an important role in future models. Thanks to the new multiprocessing capabilities of our ULD model, we will be able to run larger experiments by distributing the computation to a cluster. For example, we will be able to test the full system on large speech databases with gold standard alignments (e.g. the TIMIT corpus), and apply the learning algorithm to a variety of languages. 
+
+Given its the language-independent nature and the latent variables it infers, ULD provides a framework for generating linguistic and automatic speech recognition (ASR) resources such as pronunciation dictionaries, particularly for under-resourced languages. Pronunciation dictionaries, which map words to their phonetic transcriptions, are required for forced alignment (which has many research and industrial applications) as well as in most ASR systems \citep{besacier:2014}. With improved accuracy, ULD might in aid in lowering the production cost associated with generating such dictionaries, while simultaneously helping to fill a significant void in resources for specific accents and under-resources languages, whose current scarcity contributes to the under-representation of these languages in some areas of research and industry. 
+
+The utility of ULD's complete learning framework is not limited to research and industrial development. In the developing world\textemdash where many of under-resourced languages can be found\textemdash literacy and computer literacy are major issues facing millions. While ASR applications have been credited with improving literacy \citep{adams:2005} and increasing computer accessibility, \citet{plauche:2006} point to the prohibitive cost of producing the requisite resources as the main obstacle to developing these technologies. An unsupervised system such as ULD could break this barrier by increasing the speed at which production can take place and lowering the cost. 
+
+\section{Conclusion} 
+We have presented a language-independent variational Bayesian inference model for the fully unsupervised induction of a complete hierarchy of linguistic units directly of an acoustic input, based on the sampling-based approach to the same problem by \citet{lee:2015}. Our variational model promises significant decreases in amount of time required to train the model by virtue of the ease with which it can be distributed to multiple cores. For the acoustic model and adaptor grammar, we discussed experimental results and speed improvements made by their existing variational Bayesian implementations \citep{ondel:2016, cohen:2010, zhai:2014}. These results introduce questions regarding the current methods of evaluating unsupervised models while concomitantly offering a glimpse at a mathematical system for productivity and reuse thought to be similar to our own internal mental representation. Lastly, we discussed future experiments that our variational framework will enable us to conduct, as well as several real-world applications of our model. 
+
+
+\appendix
+
+\include{appendix_a}
+
+\newpage 
+\bibliographystyle{apalike}
+
+\bibliography{thesis}
+
+\end{document}
+

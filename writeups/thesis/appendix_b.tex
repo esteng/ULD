@@ -1,0 +1,159 @@
+
+
+\section{Deriving Variational Updates}
+\label{append_b}
+
+\subsection{Mean Field Approximation }
+
+Recall our mean-field assumption was to treat each variational distribution as conditionally independent, i.e. $q(Z) = \prod\limits_{i} q_i(z_i)$. Also recall that our bound on the log marginal likelihood was:
+
+
+\begin{align} 
+\nonumber \mathcal{L}(q) \geq \sum\limits_{z_i \in Z} q(Z) \log\ p(X,Z|\Phi) + H(q) \end{align}
+
+
+Replace $q(Z)$ with this product:
+
+\begin{align} 
+\nonumber \mathcal{L}(q) \geq \sum\limits_{z_i \in Z} \left( \prod\limits_{i} q_i(z_i) \right) \log\ p(X,Z|\Phi) + H(q) \\
+\mathcal{L}(q) \geq \mathbb{E}_{ \prod\limits_{i} q_i(z_i) } \log\ p(X,Z|\Phi) [\log\ p(X,Z|\Phi)] + H(q)
+\end{align}
+
+Using the chain rule and by expanding the entropy term, we can rewrite this expression as
+
+\begin{align} \log\ p(X|\Phi) + \sum\limits_{i=1}^{| Z|} \mathbb{E}_q [\log\ p(z_i | X, z_1,..., z_{i-1}, \Phi)] - \sum\limits_{i=1}^{| Z|} \mathbb{E}_q[\log\ q_{\nu_i}(z_i)] \end{align}
+
+Since $p(X \vert Phi)$ does not depend on the variational parameter $\nu_i$ it factors out as a constant (recall that this is a lower bound, not an exact equality). We can reorder the elements of $Z$ in any way we wish. If we reorder them each time so that $z_i$ comes last, we can say:
+
+\begin{align} \mathcal{L}_i = \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] - \mathbb{E}_q[\log\ q_{\nu_i}(z_i)]
+\end{align} \citep{blei:2006}
+
+Note that for any exponential family distribution $q_{\nu_i}$, 
+
+\begin{align} q_{\nu_i}(z_i) = h(z_i) \exp \big\{ \nu_i^{T} z_i - a(\nu_i) \big\} \end{align}
+
+where $a(\nu_i)$ is the cumulant function, which for the first three derivatives is equivalent to the corresponding derivatives of the same distribution's moment generating function. We can rewrite our equation using this form for $q_{\nu_i}(z_i)$:
+
+
+\begin{align} 
+\nonumber \mathcal{L}_i = \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] - \mathbb{E}_q\bigg[\log\ \Big( h(z_i) \exp \big\{ \nu_i^{T} z_i - a(\nu_i) \big\} \Big) \bigg] \\
+\nonumber = \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q\bigg[\log\ \left( h(z_i))\right) + \nu_i^{T} z_i - a(\nu_i) \bigg] \\
+\nonumber = \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q\big[\log\ \left( h(z_i))\right)\big] - \mathbb{E}_q[\nu_i^T z_i]  + \mathbb{E}_q[a(\nu_i)] \\
+= \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q\big[\log\ \left( h(z_i))\right)\big] - \nu_i^T a'(\nu_i) + a(\nu_i)
+\end{align} 
+
+
+Note that $\mathbb{E}_q[\nu_i^Tz_i] = \nu_i^T a'(\nu_i)$ since $E_q(z_i) = a'(\nu_i)$ and $\nu_i^T$ factors out as a constant when taking the expectation with respect to $q$. The goal of variational inference is to cast the intractable calculation of the posterior as an optimization problem. In most optimization problems, there are two general steps: (1) computing an objective function which allows us to (2) optimize the function by adjusting the parameters. 
+
+
+Recall that to avoid expensive computations, we employ exponential family distributions which allow us to simplify the problem. Our goal is to optimize the function by adjusting the variational parameters, so we take the partial derivative of our function with respect to $\nu_i$: 
+
+\begin{align}
+\nonumber \frac{\delta}{\delta \nu_i} \mathcal{L}_i = \frac{\delta}{\delta \nu_i} \left( \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q\big[\log\ \left( h(z_i))\right)\big] - \nu_i^T a'(\nu_i) + a(\nu_i) \right) \\
+\nonumber = \frac{\delta}{\delta \nu_i} \left( \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q[\log\ h(z_i))] \right) - \left(\nu_i^Ta''(\nu_i)  + a''(\nu_i)\right) + a''(\nu_i) \\
+= \frac{\delta}{\delta \nu_i} \left( \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q[\log\ h(z_i))] \right) - \nu_i^Ta''(\nu_i)
+\end{align}
+
+Setting this to $0$ we get:
+\begin{align}
+\nonumber 0 = \frac{\delta}{\delta \nu_i} \left( \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q[\log\ h(z_i))] \right) - \nu_i^Ta''(\nu_i) \\
+\nonumber \nu_i^Ta''(\nu_i) = \frac{\delta}{\delta \nu_i} \left( \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \mathbb{E}_q[\log\ h(z_i))] \right)\\
+\nu_i =  \left( \frac{\delta}{\delta \nu_i} \mathbb{E}_q[\log\ p(z_i| Z_{-i}, X, \Phi)] -  \frac{\delta}{\delta \nu_i} \mathbb{E}_q[\log\ h(z_i))] \right) \left(a''(\nu_i)\right)^{-1}
+\end{align}
+
+If $p(z_i\vert Z_{-i}, X, \Phi)$ is also a member of the exponential family, it can be rewritten:
+
+\begin{align}
+p(z_i| Z_{-i}, X, \Phi) = h(z_i) \exp\big\{g_i(Z_{-i}, X, \Phi)^Tz_i - a\left(g_i(Z_{-i}, X, \Phi)\right) \big\}
+\end{align}
+
+where $g_i(Z_{-i}, X, \Phi)$ is the natural parameter of distribution $p$. Replacing $ p(z_i\vert Z_{-i}, X, \Phi) $ (first in the expected values for the sake of readability) and taking the derivative gives us
+
+\begin{align*}
+\numberthis &\mathbb{E}_q [\log\ p(z_i| Z_{-i}, X, \Phi)] = \mathbb{E}_q [\log\ h(z_i)] + \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]^Ta'(\nu_i) - \mathbb{E}_q \big[a\left(g_i(Z_{-i}, X, \Phi)\right) \big]\\
+\nonumber &\frac{\delta}{\delta \nu_i} \mathbb{E}_q [p(z_i| Z_{-i}, X, \Phi)] =  \frac{\delta}{\delta \nu_i} \mathbb{E}_q [\log\ h(z_i)] \\
+  \enspace \enspace \nonumber &+ \bigg( \frac{\delta}{\delta \nu_i}\left( \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]^T \right) a'(\nu_i)  
+    + \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]^T a''(\nu_i) \bigg)   - \frac{\delta}{\delta \nu_i} \mathbb{E}_q \big[a\left(g_i(Z_{-i}, X, \Phi)\right) \big]\\
+\numberthis &= \frac{\delta}{\delta \nu_i} \mathbb{E}_q [\log\ h(z_i)] + \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]^Ta''(\nu_i) 
+\end{align*}
+
+Notice that many of the expectations drop out. Substituting this for $\frac{\delta}{\delta \nu_i} \left( \mathbb{E}_q[\log\ p(z_i \vert Z_{-i}, X, \Phi)] \right)$ in our first differentiation, we get:
+
+
+\begin{align}
+\label{expectation_of_g}
+\nonumber \nu_i = \left( \frac{\delta}{\delta \nu_i} \mathbb{E}_q [\log\ h(z_i)] + \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]^Ta''(\nu_i) -  \frac{\delta}{\delta \nu_i} \mathbb{E}_q[\log\ h(z_i))] \right) \left(a''(\nu_i)\right)^{-1} \\
+\nonumber =  \left( \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]^Ta''(\nu_i) \right) \left(a''(\nu_i)\right)^{-1} \\
+= \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]
+\end{align}
+
+So the optimal value (when the derivative is $0$) of $\nu_i$ is $\nu_i = \mathbb{E}_q[g_i(Z_{-i}, X, \Phi)]$. 
+
+\subsection{Conjugacy}
+
+Now we need to obtain a closed-form expression for $\mathbb{E}_q[g_i(Z_{-i}, X, \Phi)$. First, let $\Phi$ becomposed of 2 parts $\phi_1$ and $\phi_2$, where $\phi_1$ is the number of observations contributed by the prior, and $\phi_2$ corresponds to the total effect of the observations on the sufficient statistic. Because of the factorization and exponential family assumptions we made earlier, we can say:
+
+\begin{align}
+\nonumber P_{\pi}(z_i | \phi_1, \phi_2) = f(\phi_1, \phi_2) \exp\big\{\eta^T\phi_1 - \phi_2 a(\eta)\big\} \\
+\nonumber = f(\phi_1, \phi_2) g(\eta)^{\phi_2}\exp\big\{\eta^T\phi_1 \big\}\\
+\propto g(\eta)^{\phi_2}\exp\big\{\eta^T\phi_1 \big\}
+\end{align}
+
+where $\eta$ are the natural parameters for the distribution, $a(\eta)$ is the cumulant function, and $f(\phi_1, \phi_2)$ is a normalizing function. 
+
+Assuming the posterior over data and local hidden variables $P(X, Z_{-i} \mid z_i)$ is also in the exponential family and factorizes, we can say that for one data point $x_n$ 
+
+\begin{align}
+\nonumber P(x_n, z_n \mid z_i) = h(x_n, z_n) g(z_i)\exp\big\{z_i^T t(x_n, z_n)\big\} \\
+\Rightarrow P(X,Z_{-i} \mid z_i) = \prod\limits_{z_n \in Z_{-i}}  h(x_n, z_n) g(z_i)^N \exp\big\{z_i^T t(x_n, z_n)\big\} 
+\end{align}
+
+where $t(x_n, z_n)$ is the sufficient statistic, which in most cases is simply the count of occurrences of $x_n$ or $z_n$. By Bayes rule, the distribution over the selected hidden variable rewrites as  
+
+\begin{align}
+\nonumber P(z_i | X, Z_{-i}, \Phi) \propto P(X,Z_{-i} | z_i)P(z_i|\Phi) \\
+\nonumber = \prod\limits_{n=0}^N  h(x_n, z_n) g(z_i)\exp\big\{z_i^T t(x_n, z_n)\big\}  g(\eta)^{\phi_2}\exp\big\{\eta^T\phi_1 \big\} \\
+\nonumber \propto g(z_i)^N \exp\big\{z_i^T t(x_n, z_n)\big\}  g(\eta)^{\phi_2}\exp\big\{\eta^T\phi_1 \big\} \\
+\propto g(z_i)^{N+\phi_2} \exp\bigg\{z_i^T \big(\phi_1 + \sum\limits_{z_n \in Z_{-i}} t(x_n, z_n)\big)\bigg\}
+\end{align}
+
+Because all exponential family distributions have conjugate priors, this result implies that the posterior $P(z_i \mid X, Z_{-i}, \Phi)$ is the same type of distribution as the prior with parameters:
+
+\begin{align}
+P(z_i | X,Z_{-i},\Phi) = P_{\pi}\big(z_i | \phi_1 + \sum\limits_{z_n \in Z_{-i}} t(x_n, z_n), \phi_2 + N\big)
+\end{align}
+
+This means that the natural parameters of the posterior distribution on global hidden variables has the natural parameters $\phi_2 + \sum\limits_{z_n \in Z_{-i}} t(x_n, z_n)$ and $\phi_2 + N$, giving us a closed form for our expectation in \eqref{expectation_of_g}: 
+
+\begin{align}
+\mathbb{E}_q[g_i(Z_{-i}, X, \Phi)] = \mathbb{E}_q \begin{bmatrix} \phi_1 + \sum\limits_{z_n \in Z_{-i}} t(x_n, z_n) \\ \phi_2 + N \end{bmatrix}
+\end{align}
+
+\citep{hoffman:2013}
+
+
+
+\subsection{Alternative Form}
+We can derive an alternative form for an optimal setting of $q$ without the exponential family requirements by following the method described in \citet{bishop:2006}. Recall that 
+
+\begin{align}
+ \nonumber \mathcal{L}(q) = \sum\limits_{z_i \in Z} \Big( \left( \prod\limits_{i} q_i(z_i) \right) \log\ p(X,Z|\Phi) + \sum\limits_{i}q_i(z_i) \Big)
+\end{align}
+
+This can be rewritten as 
+
+\begin{align*}
+\label{to_max}
+\nonumber \mathcal{L}(q) &= \sum\limits_{\forall z_j} q_j(z_j) \Big( \sum\limits_{z_i \neq z_j} \log\ p(X,Z) \prod\limits_{i\neq j}q_i(z_i) \Big) - \sum\limits_{\forall z_j} q_j(z_j) \log\ q_j + const\\
+\numberthis &= \sum\limits_{\forall z_j} q_j(z_j) \log\ \tilde p(X, z_j) - \sum\limits_{\forall z_j} q_j(z_j) \log\ q_j(z_j) + const 
+\end{align*}
+
+where $\log \tilde p(X, z_j) = \mathbb{E}_{i\neq j}[\log\ p(X,Z)] + const$ and $\mathbb{E}_{i\neq j}$ is the expectation taken with respect to all distributions $q$ except $q_i$. Maximizing \eqref{to_max} is equivalent to minimizing the KL divergence, with the minimum occurring when $q_j(z_j) = \tilde p(X,z_j)$. Thus the optimal distribution $q^*_j(z_j)$ can be written:
+
+\begin{align}
+\log q^*_j(z_j) = \mathbb{E}_{i \neq j}[\log\ p(X,Z)] + const
+\end{align}
+\citep{bishop:2006}
+
+
+\input{appendix_c}

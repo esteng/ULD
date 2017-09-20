@@ -1,0 +1,359 @@
+PAPER OUTLINE
+
+Introduction
+1.1 Motivation
+- Natural language key from both engineering and scientific points of view
+    - need to be able to interact w machines
+    - unique to humans 
+- We'd like to understand the computational processes behind language
+    - for both abovementioned
+- Current language systems (mostly HMM and Deep-learning based) perform best in small subset of languages where large amounts of labelled training data exist
+    - vast majority of the world's languages: not the case
+    - even where does exist, lack of good training data can be problem
+- More importantly: people do not do supervised learning
+    - we need much less data, are much better
+    - points to unsupervised learning as potential solution
+    - allows us to incorporate different theories abt language/cognition into learning model
+
+1.2 The Problem
+- We're looking at lexical discovery, as done in Lee 2015
+    - how do we learn to distinguish words from continuous language input?
+    - model unique in that it tries to learn phones, morphemes, and words in same model
+    - in this sense, is a "joint model" which concomitantly tries to model multiple interrelated phenomena 
+    - joint learning has been shown to improve model accuracy (cite Johnson)
+
+1.3 The Original Model
+- model uses Bayesian inference
+    - trying to infer posterior distribution on latent variables in model from data and prior assumptions  
+        - TODO: more about latent variable models, etc. 
+    - TODO: introduce generative model
+    - very powerful method, lets you update theory according to evidence and incorporate your knowledge about the model, but gives rise to inference problem
+        - TODO: explain inference problem, in marginal likelihood
+    - in 2015 paper, sampling used
+        - briefly explain sampling
+    - sampling slow and hard to parallelize (cite Zhai 2014) -- not scalable to kinds of large datasets that we have, esp when it comes to raw audio input (more audio data exists than you could process)
+    - how do you make this faster?
+
+1.4 Variational Bayes
+- overview:
+    - re-casts inference challenge as optimization problem
+    - allows iterative optimization of an approximation of posterior 
+    - lends itself to parallelization across multiple cores and interfacing with tools such as MapReduce framework
+    - much faster to converge than sampling without significant reduction in accuracy
+1.4.1 ELBO
+    - show math behind deriving ELBO (TODO: copy/reduce wiki material)
+        - explain expected value wrt to variable
+        - then results (rest in appendix)
+    - elbo is evidence lower bound 
+    - is a lower bound on variational distribution which approximates posterior (that which we cannot compute) from the generative model (which we can compute)
+    - ultimate goal -- get lower bound as close to real posterior as you can 
+        - show when this happens, KL = 0 i.e. distributions are the same
+    - show lower bound for generative model
+
+1.4.2 Mean Field 
+- one main reason computing posterior impossible: conditional dependencies when you try to reverse the model
+    - maybe give an example?
+- solution: mean field method
+    - grew out of physics literature
+    - idea: since q(z) is approx., break dependence assumptions
+    - q(z) = \prod q(z_i)
+    - will allow you to iteratively update each q(z_i) while holding others constant
+
+1.4.3 Exponential family
+- many dists. are exponential family
+- have properties that will allow us to greatly simplify the problem
+- apply to mean field methods:
+    - just show the results (TODO: copy and reduce wiki in appendix)
+- key takeaway: natural parameters jazz
+
+1.4.4 Deriving updates
+- conjugacy is key feature of model
+    - if prior and posterior are in the same family, they are conjugate, and the prior is the ``conjugage prior'' for the likelihood
+    - all exponential family dists have conjugate priors
+    - this makes life very easy:
+    - TODO: appendix: insert math showing what the actual update is for the natural parameter jazz
+    - intuitive result: means in the posterior, basically just update the pseudocounts with the number of times that thing was seen in the data
+
+1.4.5 CAVI
+- TODO: find good explanation of the difference
+- global governs several, local for each data point
+- updates essentially the same
+    - give updates for each in general form (exponential)
+    - TODO: insert actual updates
+    - TODO: review explanation why they are slightly
+- iterating between local and global updates gives EM-style algorithm for VB
+    - E-step: compute a new objective function (ELBO) given the data
+    - M-step: optimize global variables to maximize the objective function
+    - TODO: give pseudocode for CAVI
+- point about how you can also simultaneously update the actual model parameters (as done in AG)
+- until model converges, iterate
+- see here how you can multiprocess it easily
+    - local variable updates can be distributed to as many cores as needed, and then collected again
+
+Methods
+2.1 The Generative Model
+2.1.1 Adaptor Grammars
+- High-level adaptor grammars stores all discovered syntactic structures and biases reusing frequently occurring ones. 
+- First: PCFG (from Johnson 2007)
+    - First: CFG:
+        - CFG is quadruple (N, E, R, S)
+        - nonter. ter, rules, start
+        - N \cap E = null
+        - start \in N
+        - R form A -> beta 
+            - A \in N and beta \in (N \cup E)* (i.e. any number of things in N\cup E)
+    - PCFG: (N, E, R, S, \theta)
+        - theta set of rule weights such that \forall A-> beta \in R sum theta_A->Beta = 1
+        - R_A subset of R w A on lhs
+    - PYP process:
+        - stick breaking 
+
+
+
+        - rich get richer process 
+        - frequently reused parses get stopped at more often
+- AG definition: (from cohen 2010 and zhai 2014)
+    - tuple: (G, M, a, b, \alpha) where G is CFG, (cohen 2010)
+    - let A_1...,A_k be adapted nonterminals in reverse topological sorted order 
+
+    Building Grammar
+    - for each nonterminal
+        - draw rule weights \theta_A from Dir(\alpha_A)
+    - for each adapted nonterminal A in A_1,...,A_k construct G_A:
+        - draw \pi_A ~ PYP(a_A, b_A)
+        - for i in {1,....} construct tree z_{A_i} 
+            - draw a rule A -> B_1 ... B_n from R_A
+            - set z_{A,i} to A
+                            / \
+                            B1 Bn
+            - while z_ai has non-terminals as leaves
+                - choose a B_i
+                - if non-adapted expand using theta
+                - if adapted expand using G_B (guaranteed to be defined because of topological ordering)
+        - for i in {1....}
+            - set G_A(z_{A,i}) = \pi_{A,i}
+
+    Generating data
+    - for i in {1...|x|} draw tree z_i:
+        - if S adapted 
+            draw z_i ~ G_S
+        - else
+            - draw S-> B1...Bn from R_S
+            - set z_i to    S
+                           / \
+                           B1 Bn
+            - while there are non-terminal leaves
+                - choose B
+                - if B adapted
+                    - expand using G_B
+                - else (B nonadpated):
+                    - expand using PCFG
+
+- latent variables:
+    - z_a,i, z_i, \nu, and \theta
+    - z_i the most interesting, but z_{A,i} (what gets stored) can also reveal a lot about underlying linguistic structure
+- inference problem: 
+    - posterior distribution on full derivational trees $z_i$ given the sentences 
+    - large number of latent variables
+    - also very large number of parses for each sentence (usually grammar ambiguous)
+
+
+DPHMM overview
+- what it learn:
+    - phonetic boundaries of the utterance 
+    - clusters of acoustically similar segments
+    - PLUs
+- HMM brief overview (from rabiner)
+    - consists of finite number of states, transition between states to generate observations
+    - emission generated by probability dist which depends on current state
+    - in our case, this prob dist is a GMM
+    - also probability distribution over transitions 
+    - each PLU is modeled by its own 3-state HMM
+        - correspond to start, middle, end of phone
+
+- GMM brief overview
+    - when you have multimodal distribution, you can use a linear combination of multiple Gaussians
+    - p(x) = \sum\limits_{k=1}^K \pi_k \mathcal{N}(x|\mu_k, \Sigma_k)
+    - each Gaussian known as a ``component'' w/ mean \mu_k and covariance \Sigma_k
+    - need ``mixing coefficients'' \pi_k s.t. \sum\limits_{k=1}^K \pi_k = 1
+    - these give you the weight of each component (i.e. how often each component is picked).
+- model: (from Ondel)
+    - define Dirichlet by sampling from beta (1, \gamma)
+    - sample HMM parameters from Dirichlet
+    - sample from HMM
+        - choose HMM parameters based on pi_i (stick weight thing)
+        - sample path s = s1 ... sn from HMM transition probability dist.
+        - for s_i in s
+            - choose gaussian component from mixture model
+            - sample data point from gaussian density function
+    - latent variables:
+        - cluster labels 
+        - HMM states
+        - GMM components 
+    - hyperparameters/priors
+        - mean $\mu$ and covariance $\Sigma$ with diagonal $\gamma$ drawn from Normal-Gamma distribution with parameters $\mu_0, \kappa_0, \alpha_0, and \beta_0$ 
+        - weights $\pi$ of GMM and the row $r$ of the transition matrix have prior of $Dir(\eta_0^{gmm})$ and $Dir(\eta_0^{hmm,r})$
+        - prior over stick-weight proportions $\nu_i$ is $Beta(1,\gamma)$ 
+
+2.1.3 Noisy Channel
+- Purpose of noisy channel: allow DPHMM and adaptor grammar to rewrite each other's outputs
+- for example, if there is a mistake made by DPHMM in putting signal in wrong cluster, AG could fix it by substituting. 
+- allow each to insert, delete, substitute
+- these are the same operations as in traditional Levenshtein distance algorithm (cite original)
+    - dynamic programming algorithm usually used to find the edit distance (min number of insertions, deletions, substitutions) between two strings
+    - however, change the paradigm a little 
+    - instead of aligning two strings, we leave one string unspecified, and use it to enumerate all possible strings that string could be edited to given the operations
+    - to remain linguistically accurate, we limit number of insertions/deleltions, and strongly prioritize identity rewrites
+        - would be a bad idea to let the models entirely rewrite the output of the other
+- LS distance model takes following:
+    - list of segmented PLUs
+        - top-level if output by AG, bottom-level if output by DPHMM
+    - length of other
+        - known because segmentation remains the same
+    - operation probabilities
+        - drawn from 3d Dirichlet
+    - probability of inserting into other string
+        - drawn from k-length Dirichlet
+    - probability of substituting
+        - k by k matrix (subbing each pair), each row drawn from its own k-dimensional Dirichlet
+    - likelihoods 
+        - the likelihood of each PLU at each position in the list
+        - generated by the AG and DPHMM models
+- gives us new latent variables:
+    - operation probabilities $\omicron$
+    - insertion probabilities $\iota$
+    - substitution probabilities $\zeta_1, ... \zeta_k$
+
+Summary of Lee results
+- Lee et al ran it before
+- what they ran it on:
+    
+    - part of MIT lecture corpus
+    - one had 50-PLU limit on inventory
+    - one had number of PLUs discovered by pre-running DPHMM on it
+    - give table 1 + this:
+    - Economics, 99; Speech Processing, 111; Clustering, 91; Speaker Adaptation, 83; Physics, 90; and Algebra, 79
+
+- convergence
+    - achieved in 200 iterations
+    - this takes about a week when run on a single core. 
+- lesioning
+    - removed acoustic model
+        - so no relabeling/resegmenting PLUs
+    - removed noisy channel from -AM as well
+        - basically making it 2 step model instead of joint.
+
+- phone segmentation results
+    - phone segmentation evaluated against forced alignments of each lecture w 20ms window of tolerance 
+    - compared with Hierarchichal HMM and just DPHMM
+    - give table of f1 values
+- Word segmentation
+    - first: hard to define
+        - because lectures were not hand transcribed, no golden standard. 
+    - used same process as phone (forced alignment, 20ms windows)
+    - NC was important for word segmentation
+    - cannot group same word type with different surface realization into same cluster if there is no NC to relabel
+    - AM also helped (improving average of 1.6%), suggests that there is some benefit to having joint learning model 
+    - give table 3
+    - also evaluated using top 20 term frequency–inverse document frequency words
+        - a commonly used measure of word importance 
+    - compare different systems with baseline (Park and Glass) and state-of-the-art (Zhang) (which uses richer representation than more common MFCCs-- which are used in ULD )
+    - outperformed this system at times despite sparser representation
+- Qualitative results
+    - mentions some frequent words found: globalization, collaboration
+        - found a sub-word unit -ation for these as well
+    - sub-word storage
+        - because the nature of adaptor grammars is to store all parse trees, certain very productive morphemes like '-able' and '-ation' are stored, but also things above the word level, like 'the arab muslim world'. 
+    - this raises interesting linguistic question
+        - how natural are words as concept in general?
+        - perhaps some things that orthographically count as multiple words ought to be treated as one lexical item based on how they appear
+        - especially in model of language acquisition, this could be true
+            - example of 'elemeno' as a letter in alphabet (maybe?)
+        - overall idea of balancing linguistic productivity and reuse 
+            - cost and benefit to both:
+                - produtivity: benefit: no storage needed; needed to make up entirely new things
+                cost: have to compute everything all the time, even if it comes up in almost every sentence 
+                - reuse: benefit: everything you ever want to use has already been stored, just look it up and pull it out
+                cost: end up storing a ton of stuff you never use; imagine you stored every sentence you ever said -- how often do you actually use those sentences? vast majority will never come up again, wasting space 
+                    - plus the more you store, the longer it takes to look it up
+            - this system balances it
+                - in doing so, might reveal something about how we balance these things as well
+                - very possible that for some sequences of words that occur very often in a certain context and always in the same way, we treat that as one stored lexical item 
+- Variational contribution
+    - allows experiments to be run faster through multicore processing
+
+    - numbers on the separate parts
+
+    - AG improvement 
+    - replicated original word semgentation AG experiments in Johnson + goldwater 2009
+        - fewer iterations -- full passes through all the data 
+            -(40 vs 2000 for sampling (cohen thesis))
+        - faster 
+            - 2h 14m for sampling AG
+            - 2h 34m for variational single core
+            - 47m (2.8 times faster) when multiprocessing on 20 cpu cluster
+
+    - DPHMm improvement (Ondel)
+        - faster for clustering task used to mutually evaluate sampling and vb
+            - sampling: 11 hours on 1 core
+            - VB: <30m using 300 cores
+        - accuracy
+            - VB had better mutual information between discovered phones and real phones, meaning they were more closely dependent on each other
+
+Work for future
+    - These sort of improvements allow 
+        - more experiments
+            - faster training time means we can run more experiments
+            - particularly lesion experiments
+            - would like to see what just -NC would do
+        - different parametrizations
+            - option to have different variational distribution intializations
+            - recall they do not have to be random 
+        - larger experiments
+            - could perform on larger labeled dataset i.e. TIMIT that have gold standard alignments 
+            - can be run on different languages, including underresourced language corpora e.g. GlobalPhone Hausa 
+        - framework for generating pronunciation dictionaries and alignments
+            - pronunciation dictionaries are required for forced alignment as well as other ASR applications (any kind of speech recognition basically) cite Besacier
+            - with improved accuracy, ULD-type system can be used to generate phone and word-level alignments with the audio it's trained on
+            - also contains enough information to generate pronunciation dictionary for languages it is trained on
+            - these can then further be used with forced aligners to align other data in languages 
+                - that data can be used in linguistic research on those languages
+            - also can be used to make ASR applications for under-resourced langs
+                - literacy often problem in areas where under-resourced languages spoken
+                - prohibitive cost of developing ASR resources cited by Plauché et al as largest problem w making computer access available to everyone thru ASR
+                    - unsupervised system could help lower that cost
+                - ASR can be used to help foster literacy (cite Adams)
+                - ULD to provide resources and help to develop that kind of software cheaply and quickly 
+            - endangered languages 
+                - probably would benefit from having more ASR resources (cite Besacier)
+
+
+
+
+
+
+
+
+
+2.1.2 DPHMM (from lee 2012)
+- what it learn:
+    - phonetic boundaries of the utterance 
+    - clusters of acoustically similar segments
+    - PLUs
+- parts of the model: 
+    - data x of 39 dimensional MFCC vectors encoding speech data
+        - x_t^i is t^{th} frame of ith utterance
+    - boundaries b_t^i 
+        - binary r.v. whether there is a boundary between x_t^i and x_{t+1}^i
+    - segment p^i_{j,k} is feature vectors between 2 boundaries
+    - cluster label (c_{j,k}^i) means segment p^i_{j,k} generated by HMM w label c^i_{j,k}
+    - HMM \Theta_c each with 3 emission states (beginning middle end of sub-word unit)
+    emission probability modeled by GMM w 8 mixtures
+    - hidden state s^i_t associated w x^i_t
+    - mixture ID m_t^i is gaussian mixture that generates x_t^i
+
+- generative model:
+    - let g_q be the index of the qth boundary variable w value 1
+    - let p^i_{g^i_q+1, g^i_{q+1}}
+
+

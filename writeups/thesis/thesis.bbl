@@ -1,0 +1,158 @@
+\begin{thebibliography}{}
+
+\bibitem[Adams, 2005]{adams:2005}
+Adams, M. (2005).
+\newblock The promise of automatic speech recognition for fostering literacy
+  growth in children and adults.
+\newblock {\em Handbook of literacy and technology}, 2:109--128.
+
+\bibitem[Besacier et~al., 2014]{besacier:2014}
+Besacier, L., Barnard, E., Karpov, A., and Schultz, T. (2014).
+\newblock Automatic speech recognition for under-resourced languages: {A}
+  survey.
+\newblock {\em Speech Communication}, 56:85--100.
+
+\bibitem[Bishop, 2006]{bishop:2006}
+Bishop, C.~M. (2006).
+\newblock {\em Pattern recognition and machine learning}.
+\newblock Springer.
+
+\bibitem[Blei and Jordan, 2006]{blei:2006}
+Blei, D.~M. and Jordan, M.~I. (2006).
+\newblock Variational inference for {D}irichlet process mixtures.
+\newblock {\em Bayesian Analysis}, 1(1):121--143.
+
+\bibitem[Blei et~al., 2017]{blei:2017}
+Blei, D.~M., Kucukelbir, A., and McAuliffe, J.~D. (2017).
+\newblock Variational inference: {A} review for statisticians.
+\newblock {\em Journal of the American Statistical Association},
+  (just-accepted).
+
+\bibitem[Cohen, 2011]{cohen:dissertation}
+Cohen, S. (2011).
+\newblock {\em Computational {L}earning of {P}robabilistic {G}rammars in the
+  {U}nsupervised {S}etting}.
+\newblock PhD thesis, Ph. D. thesis, Carnegie Mellon University.
+
+\bibitem[Cohen et~al., 2010]{cohen:2010}
+Cohen, S.~B., Blei, D.~M., and Smith, N.~A. (2010).
+\newblock Variational inference for adaptor grammars.
+\newblock In {\em Human Language Technologies: The 2010 Annual Conference of
+  the North American Chapter of the Association for Computational Linguistics},
+  pages 564--572. Association for Computational Linguistics.
+
+\bibitem[Dempster et~al., 1977]{dempster:1977}
+Dempster, A.~P., Laird, N.~M., and Rubin, D.~B. (1977).
+\newblock Maximum likelihood from incomplete data via the {E}{M} algorithm.
+\newblock {\em Journal of the royal statistical society. Series {B}
+  (methodological)}, pages 1--38.
+
+\bibitem[Hoffman et~al., 2013]{hoffman:2013}
+Hoffman, M.~D., Blei, D.~M., Wang, C., and Paisley, J. (2013).
+\newblock Stochastic variational inference.
+\newblock {\em The Journal of Machine Learning Research}, 14(1):1303--1347.
+
+\bibitem[Hopcroft et~al., 2006]{hopcroft:2006}
+Hopcroft, J.~E., Motwani, R., and Ullman, J.~D. (2006).
+\newblock {\em Introduction to Automata Theory, Languages, and Computation (3rd
+  Edition)}.
+\newblock Addison-Wesley Longman Publishing Co., Inc., Boston, MA, USA.
+
+\bibitem[Johnson, 2008]{johnson:2008}
+Johnson, M. (2008).
+\newblock Using {A}daptor {G}rammars to {I}dentify {S}ynergies in the
+  {U}nsupervised {A}cquisition of {L}inguistic {S}tructure.
+\newblock In {\em ACL}, pages 398--406.
+
+\bibitem[Johnson et~al., 2007]{johnson:2007}
+Johnson, M., Griffiths, T.~L., and Goldwater, S. (2007).
+\newblock Adaptor grammars: A framework for specifying compositional
+  nonparametric {B}ayesian models.
+\newblock In {\em Advances in neural information processing systems}, pages
+  641--648.
+
+\bibitem[Lee and Glass, 2012]{lee:2012}
+Lee, C.-y. and Glass, J. (2012).
+\newblock A nonparametric {B}ayesian approach to acoustic model discovery.
+\newblock In {\em Proceedings of the 50th Annual Meeting of the Association for
+  Computational Linguistics: Long Papers-Volume 1}, pages 40--49. Association
+  for Computational Linguistics.
+
+\bibitem[Lee et~al., 2015]{lee:2015}
+Lee, C.-y., O'Donnell, T.~J., and Glass, J. (2015).
+\newblock Unsupervised lexicon discovery from acoustic input.
+\newblock {\em Transactions of the Association for Computational Linguistics},
+  3:389--403.
+
+\bibitem[Levenshtein, 1966]{levenshtein:1966}
+Levenshtein, V.~I. (1966).
+\newblock Binary codes capable of correcting deletions, insertions, and
+  reversals.
+\newblock In {\em Soviet physics doklady}, volume~10, pages 707--710.
+
+\bibitem[Neal and Hinton, 1998]{neal:1998}
+Neal, R.~M. and Hinton, G.~E. (1998).
+\newblock A view of the {E}{M} algorithm that justifies incremental, sparse,
+  and other variants.
+\newblock In {\em Learning in graphical models}, pages 355--368. Springer.
+
+\bibitem[O'Donnell, 2015]{odonnell:2015}
+O'Donnell, T.~J. (2015).
+\newblock {\em Productivity and reuse in language: A theory of linguistic
+  computation and storage}.
+\newblock MIT Press.
+
+\bibitem[Ondel et~al., 2016]{ondel:2016}
+Ondel, L., Burget, L., and {\v{C}}ernock{\`y}, J. (2016).
+\newblock Variational inference for acoustic unit discovery.
+\newblock {\em Procedia Computer Science}, 81:80--86.
+
+\bibitem[Park and Glass, 2008]{park:2008}
+Park, A.~S. and Glass, J.~R. (2008).
+\newblock Unsupervised pattern discovery in speech.
+\newblock {\em IEEE Transactions on Audio, Speech, and Language Processing},
+  16(1):186--197.
+
+\bibitem[Pitman and Yor, 1997]{pitman:1997}
+Pitman, J. and Yor, M. (1997).
+\newblock The two-parameter {P}oisson-{D}irichlet distribution derived from a
+  stable subordinator.
+\newblock {\em The Annals of Probability}, pages 855--900.
+
+\bibitem[Plauche et~al., 2006]{plauche:2006}
+Plauche, M., Nallasamy, U., Pal, J., Wooters, C., and Ramachandran, D. (2006).
+\newblock Speech recognition for illiterate access to information and
+  technology.
+\newblock In {\em Information and Communication Technologies and Development,
+  2006. ICTD'06. International Conference on}, pages 83--92. IEEE.
+
+\bibitem[Rabiner and Juang, 1986]{rabiner:1986}
+Rabiner, L. and Juang, B. (1986).
+\newblock An introduction to hidden {M}arkov models.
+\newblock {\em IEEE ASSP Magazine}, 3(1):4--16.
+
+\bibitem[Sethuraman, 1994]{sethuraman:1994}
+Sethuraman, J. (1994).
+\newblock A constructive definition of dirichlet priors.
+\newblock {\em Statistica sinica}, pages 639--650.
+
+\bibitem[Zhai et~al., 2012]{zhai:2012}
+Zhai, K., Boyd-Graber, J., Asadi, N., and Alkhouja, M.~L. (2012).
+\newblock Mr. {L}{D}{A}: {A} flexible large scale topic modeling package using
+  variational inference in {M}ap{R}educe.
+\newblock In {\em Proceedings of the 21st international conference on World
+  Wide Web}, pages 879--888. ACM.
+
+\bibitem[Zhai et~al., 2014]{zhai:2014}
+Zhai, K., Boyd-Graber, J., and Cohen, S.~B. (2014).
+\newblock Online adaptor grammars with hybrid inference.
+\newblock {\em Transactions of the Association for Computational Linguistics},
+  2:465--476.
+
+\bibitem[Zhang et~al., 2013]{zhang:2013}
+Zhang, Y. et~al. (2013).
+\newblock {\em Unsupervised speech processing with applications to
+  query-by-example spoken term detection}.
+\newblock PhD thesis, Massachusetts Institute of Technology.
+
+\end{thebibliography}

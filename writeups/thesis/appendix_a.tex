@@ -1,0 +1,134 @@
+
+\section{Deriving the ELBO}
+\label{append_a}
+\subsection{The problem}
+
+Given our generative model and our data, we would
+like to find a posterior distribution: $P(Z \mid  X)$. Using
+Bayes’ Rule, we get:
+$P(Z\mid X) = \frac{P(X\mid Z)P(Z)}{P(X)} = \frac{P(X\mid Z)P(Z)}{\sum\limits_{\forall Z} P(X\mid Z) P(Z)}$
+We call the numerator of the fraction on the right the “generative
+model”. It is composed of the product of the likelihood \textit{of the
+hypothesis} ($P(X\mid Z)$) and the prior probability of the hypothesis
+($P(Z)$). Note that the former is not a probability but a measure of how
+well our hypothesis fits the data. The denominator is the ``marginal
+likelihood'' of the data, $P(X)$. To find this, we need to marginalize
+out (sum over) all possible hypotheses. Because the hypotheses are the
+range of values for all of the latent variables in our model, this
+summation is computationally intractable. Instead of explicitly computing the posterior, we are forced to find an approximation of it. Often, a sampling approach is used. However, sampling can
+be very slow to converge and is not easily parallelizable across
+multiple cores. The variational Bayesian approach, on the other hand,
+treats the problem of finding an appropriate posterior distribution as an
+optimization problem.
+
+ \begin{itemize}
+\item   Let $Z$ be our set of hidden variable collections: 
+\item   Let $\Phi$ be the collection of all model parameters (Pitman-Yor
+    parameters $a,b$ and Dirichlet distribution parameter $\alpha$.
+\item   Let $X$ be the set of observations. In the case of word
+    segmentation, for example, these would be each string of unsegmented
+    phonemes.
+\item   Note that our goal is to find $P(Z\mid X)$, the posterior (where $Z$ is
+    the set of latent variables)
+\item  recall $P(Z\mid X) = \frac{P(X\mid Z, \Phi)P(Z \mid  \Phi)}{\sum\limits_{\forall Z} P(X\mid Z, \Phi) P(Z\mid \Phi) } $ 
+\end{itemize}
+
+\subsection{Important formulae}
+
+
+\subsubsection{Jensen's inequality}
+Jensen’s inequality states that for a convex function $f $ and random
+variable $X$: 
+\begin{align}
+f(\mathbb{E}[X]) \leq \mathbb{E}[f(X)] 
+\end{align}
+We are using the logarithm of the probability, so the function is actually concave. Jensen's inequality works both ways, meaning we switch the direction of the inequality:
+    \begin{align}\log(\mathbb{E}[X]) \geq \mathbb{E}[\log(X)] \end{align}
+
+\subsubsection{Expected value}
+\label{expectedvalue}
+Note that for discrete random variables 
+\begin{align} \mathbb{E}_q(f(x)) = \sum\limits_{\forall x} q(x)f(x) \end{align}
+
+\subsubsection{Logarithms}
+
+Throughout this derivation (and the variational literature as a whole) the logarithm of the probability is used. There are various reasons to do this. Firstly, logarithms are the foundation of information-theoretic measures such as entropy. Furthermore, they allow us to transform expensive multiplication and division into cheaper addition and subtraction, and help when working with probabilities below the floating-point precision bound. Recall these facts about logarithms:
+
+\begin{itemize}
+
+\item $\lim\limits_{n\rightarrow 0} \log\ n = -\infty $
+\item $\log\ AB = \log\ A + \log\ B $
+\item $\log\ \frac{A}{B} = \log\ A - \log\ B $
+\end{itemize}
+
+
+\subsection{Derivation of variational bound}
+
+The value we are looking to approximate is our posterior, which is the
+likelihood of the latent variables given the data. Recall that our
+inference problem lies in finding the denominator to the Bayesian
+equation
+$$P(Z\mid X) = \frac{P(X\mid Z)P(Z)}{\int\limits_{\forall Z} P(X\mid Z) P(Z) dZ}$$
+Our hypotheses in this case are possible values for the latent variables
+in the model. This integral (or in the discrete case, summation) is often
+computationally intractable, so we introduce a variational approximation for it. One way we can do this is by using the Kullback Leibler (KL) divergence between this intractable integral and some variational distribution $q$.\
+
+\begin{enumerate}
+\item Let $q_\nu(Z)$ be a family of variational distributions with variational parameter $\nu$.
+\item to get the marginal likelihood ($\log\ p(X\mid \Phi)$) we take the KL divergence between $q_\nu(Z)$ and $p(Z\mid X,\Phi)$.
+\item KL divergence is given by:
+\begin{align}
+\nonumber D_{KL}(q_\nu (Z) \mid \mid  p(Z\mid X,\Phi)) = \mathbb{E}_q[\log\ \frac{q_\nu(Z)}{p(Z\mid X,\Phi)}] \\
+\nonumber  = \mathbb{E}_q [\log\ q_\nu(Z)- \log\ p(Z\mid X, \Phi)] \\
+\nonumber  = \mathbb{E}_q [\log\ q_\nu(Z)- \log\ \frac{p(Z,X\mid \Phi)}{p(X\mid \Phi)}] \\
+\nonumber  = \mathbb{E}_q [\log\ q_\nu(Z)- (\log\ p(Z,X\mid \Phi) - \log\ p(X\mid \Phi))] \\
+ = \mathbb{E}_q [\log\ q_\nu(Z)] - \mathbb{E}_q [\log\ p(Z,X\mid \Phi)] + \log\ p(X\mid \Phi) 
+\end{align}
+\citep{blei:2006} 
+
+\end{enumerate}
+Considering what KL divergence represents, it is easy to understand why it cannot be negative. From here, we can see how minimizing this equation is the same as maximizing the lower bound on $\log\ p(X\mid \Phi)$:
+
+
+\begin{align}
+\nonumber 0 \leq \mathbb{E}_q [\log\ q_\nu(Z)] - \mathbb{E}_q [\log\ p(Z,X\mid \Phi)] + \log\ p(X\mid \Phi)\\
+\nonumber - \log\ p(X\mid \Phi) \leq \mathbb{E}_q [\log\ q_\nu(Z)] - \mathbb{E}_q [\log\ p(Z,X\mid \Phi)]  \\
+\log\ p(X\mid \Phi) \geq \mathbb{E}_q [\log\ p(Z,X\mid \Phi)] - \mathbb{E}_q [\log\ q_\nu(Z)] 
+\end{align}
+
+Another method of reaching this same result uses Jensen's inequality. Consider the log marginal likelihood:
+
+\begin{align}\log\ p(X\mid \Phi) = \log\ \sum\limits_{z \in \mathbf{Z}} p(X,z\mid \Phi)\end{align}
+The sum marginalizes out the hidden variables $z$ in the joint probability distribution. Picking any variational distribution $q(z)$ we can multiply by $\frac{q(z)}{q(z)}$:
+
+
+\begin{align} \log\ \sum\limits_{\forall z \in \mathbf{Z}} ( p(x,z\mid \Phi) * \frac{q(z)}{q(z)} ) = \log\ \sum\limits_{\forall z \in \mathbf{Z}} q(z) \frac{ p(x,z\mid \Phi) }{q(z)}\end{align}
+Jensen's inequality implies
+\begin{align}\log\ \sum\limits_{\forall z \in \mathbf{Z}} q(z) \frac{p(x,z\mid \Phi) }{q(z)}  \geq \sum\limits_{\forall z \in \mathbf{Z}} q(z) \log\ \frac{ p(x,z\mid \Phi) }{q(z)} \end{align}
+This equation can be broken into: 
+
+\begin{align}
+\nonumber \sum\limits_{\forall z \in \mathbf{Z}} q(z) \log\ \frac{ p(x,z\mid \Phi) }{q(z)}= \sum\limits_{\forall z \in \mathbf{Z}} q(z) (\log p(x,z\mid \Phi) - \log q(z)) = \\
+ \nonumber \sum\limits_{\forall z \in \mathbf{Z}} q(z) \log p(x,z\mid \Phi) - \sum\limits_{\forall z \in \mathbf{Z}}  q(z)\log\ q(z) =  \\
+ \sum\limits_{\forall z \in \mathbf{Z}} q(z) \log p(x,z\mid \Phi) + \mathcal{H}(q)\\
+\end{align}
+
+where 
+
+\begin{align}
+\mathcal{H}(q) =  - \sum\limits_{\forall z \in \mathbf{Z}}  q(z)\log\ q(z) \
+\end{align} \citep{blei:2017} This first term is of the form of our expected value definition, so our equation becomes:
+
+
+\begin{align} \log\ p(x\mid \Phi) \geq \mathbb{E}_q[\log\ p(x,z\mid \Phi)] + \mathcal{H}(q) \end{align}
+
+
+This derivation yields an important fact: 
+
+\begin{align}
+\log\ p(X\mid \Phi) - KL(q(Z) \mid \mid  p(Z\mid X, \Phi)) = \mathbb{E}_q[\log\ p(z,x \mid  \Phi)] + H(q) \end{align}
+
+From this equation, we can see why minimizing KL divergence gives us the best possible value for our marginal likelihood.
+
+
+\input{appendix_b}
