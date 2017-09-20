@@ -186,6 +186,10 @@ def noisy_channel_backwards(top, len_bot, alphabet_size, op_probs,
     return prob
 
 
+# figure out how to print more intuitively, the way we've been talking about it
+# where x is top
+# y is bottom
+# z is 2k+1 edit operations
 
 # Given a Levenshtein chart of the format produced by noisy_channel(),
 # return a corresponding edit sequence.
@@ -642,12 +646,15 @@ def test_noisy_channel_back_simple():
     prob_ib = np.array([1])
     prob_sub = np.array([[1]])
     likelihoods = np.array([[1],[1]])
-
-    result_chart = noisy_channel_backwards(top, len_bot, alphabet_size, op_probs,
+    forwards_chart = noisy_channel(top, len_bot, alphabet_size, op_probs,
          prob_ib, prob_sub, likelihoods)
-    result_prob = sum(result_chart[-1,-1])
-    print("Chart:\n"+str(result_chart))
-    print("Result: "+str(result_prob))
+    backwards_chart = noisy_channel_backwards(top, len_bot, alphabet_size, op_probs,
+         prob_ib, prob_sub, likelihoods)
+    # result_prob = sum(result_chart[-1,-1])
+    print("Forward chart:\n" + str(forwards_chart))
+    print("Backwards chart:\n"+str(backwards_chart))
+    print("combined :\n", np.multiply(forwards_chart ,backwards_chart))
+    # print("Result: "+str(result_prob))
 
 
 if __name__ == '__main__':
