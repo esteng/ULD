@@ -16,6 +16,7 @@
 \usepackage{sectsty}
 \usepackage{tabularx}
 
+\renewcommand{\thefootnote}{\roman{footnote}}   
 \sectionfont{\Large}
 \subsectionfont{\large}
 \subsubsectionfont{\normalsize}
@@ -32,13 +33,15 @@
 \newcommand\numberthis{\addtocounter{equation}{1}\tag{\theequation}}
 
 \title{\vspace{-4em} \line(10,0){450}\\ Variational Bayesian Inference for Unsupervised Lexicon Discovery\\\vspace{-.7em} \line(1,0){450}}
-\author{Elias Stengel-Eskin, BA\&Sc., Honours Cognitive Science}
+\author{Elias Stengel-Eskin, BA\&Sc., Honours Cognitive Science \\
+Joint work with Emily Kellison-Linn\footnote{Department of Linguistics - McGill University. emily.kellison-linn@mail.mcgill.ca} \: and Prof. Timothy O'Donnell\footnote{Department of Linguistics - McGill University. tim.odonnell@mcgill.ca}}
 \date{}
 
 \begin{document}
 \maketitle
 
 \section{Abstract}
+
 
 Speech is a defining human trait, yet much of our mental framework for producing and processing spoken language remains a mystery. Computational models can help elucidate some these internal structures while allowing us to engineer improved speech technology. We present a variational Bayesian inference model for the fully unsupervised discovery of phones, sub-word units, and words directly from an acoustic input. Extending the state-of-the-art model for unsupervised lexicon discovery introduced by \citet{lee:2015}, which relied on sampling, our framework permits  parallelization and distribution to multiple cores, promising speed improvements and scalability. We give an introduction to variational Bayesian methodology and use it to re-frame the original model. We highlight some results from \citet{lee:2015} which underscore the capabilities of the model, and discuss improvements made to similar models through the application of variational Bayesian methods. With these advances in mind, we consider future experiments made feasible by our variational system and suggest a range potential uses for completely unsupervised language-independent models such as ours. 
 
