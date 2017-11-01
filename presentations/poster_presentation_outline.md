@@ -12,11 +12,7 @@
 - why this model (Elias) 
 	- train on less speech data
 	- linguistically accurate/interesting
-- setting the stage for generative models (Emily)
-	- When we describe the model in more detail, we're going to describe the generative model. The way our training works is that we make the assumption that any audio we're given as input was generated using this model, and then perform inference to maximize the likelihood of generating that audio data.
 
-
-## our contribution
 - Variational Bayes (Elias)
 	- intro to why VB  
 		- inference problem 
@@ -27,6 +23,13 @@
 		- VB implementations available 
 		- more computing power available easily
 - Noisy channel (Emily) 
+
+
+- setting the stage for generative models (Emily)
+	- When we describe the model in more detail, we're going to describe the generative model. The way our training works is that we make the assumption that any audio we're given as input was generated using this model, and then perform inference to maximize the likelihood of generating that audio data.
+
+
+## our contribution
 
 ## Model structure
 - from the generative perspective, with relevant latent variables
