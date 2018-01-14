@@ -9,7 +9,14 @@
 - Broad structure (Emily) 
 	- Broadly, the model is composed of 3 components: one which identifies similar units of sound and outputs a list of phone-like units given an audio recording, one which groups these units into repeated words and phrases, and a noisy channel model, which mediates between the two and allows substitutions, inserts, and deletes in the phone sequence.
 
+
+- why this model (Elias) 
+	- train on less speech data
+	- linguistically accurate/interesting
+
+=======
 ## our contribution
+
 - Variational Bayes (Elias)
 	- intro to why VB  
 		- inference problem 
@@ -21,14 +28,22 @@
 		- more computing power available easily
 - Noisy channel (Emily) 
 
+
+
+=======
 - why this model (Elias) 
 	- train on less speech data
 	- linguistically accurate/interesting
+
 - setting the stage for generative models (Emily)
 	- When we describe the model in more detail, we're going to describe the generative model. The way our training works is that we make the assumption that any audio we're given as input was generated using this model, and then perform inference to maximize the likelihood of generating that audio data.
 
 
+<<<<<<< HEAD
+## our contribution
+=======
 
+>>>>>>> 28ecc44ba1f81c137e897ee06b794a4e8d31c869
 
 ## Model structure
 - from the generative perspective, with relevant latent variables
