@@ -542,3 +542,24 @@ def write_eval_to_clusters(ctm, fpt, file_transform=None,
 
         fpt.write('\n')
 
+def write_textgrid(phone_sequence, sample_rate, filename):
+    """
+    Given a sequence of tuples of the form (label, start_sample, end_sample),
+    output a .TextGrid file showing the phone labels and boundaries. Requires 
+    Kyle Gorman's textgrid library for Python, available at 
+    https://github.com/kylebgorman/textgrid.
+    (Do pip install git+http://github.com/kylebgorman/textgrid.git for easy installation)
+    """
+    sample_dur = 1/sample_rate
+    end_time = phone_sequence[-1][2]*sample_dur
+    print("end_time=",end_time)
+
+    my_textgrid = tg.TextGrid(name='filename', maxTime=end_time)
+    my_tier = tg.IntervalTier(name='phones', maxTime=end_time)
+    for phone in phone_sequence:
+        my_tier.add(minTime=phone[1]*sample_dur, maxTime=phone[2]*sample_dur, mark=str(phone[0]))
+    my_textgrid.append(my_tier)
+
+    my_textgrid.write(filename)
+
+    pass

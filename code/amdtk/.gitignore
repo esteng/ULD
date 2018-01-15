@@ -6,7 +6,6 @@
 *.flist
 *.pyc
 *ipynb_checkpoints*
-docs/build
 /tools/*
 !/tools/openfst-python3.patch
 /recipes/*

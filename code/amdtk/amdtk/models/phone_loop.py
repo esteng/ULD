@@ -24,14 +24,12 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
 
-import logging
 import numpy as np
 from bisect import bisect
 from itertools import groupby
 from scipy.special import logsumexp
 
 from .hmm_utils import create_phone_loop_transition_matrix
-from .hmm_utils import create_linear_transition_matrix
 from .hmm_utils import forward_backward
 from .hmm_utils import viterbi
 from .model import EFDStats, DiscreteLatentModel
@@ -45,8 +43,7 @@ class PhoneLoop(DiscreteLatentModel):
 
     """
 
-    def create(n_units, n_states, n_comp_per_state, mean, var, random=True,
-               sample_var=1):
+    def create(n_units, n_states, n_comp_per_state, mean, var):
         """Create and initialize a Bayesian Phone Loope Model.
 
         Parameters
@@ -61,12 +58,6 @@ class PhoneLoop(DiscreteLatentModel):
             Mean of the data set to train on.
         var : numpy.ndarray
             Variance of the data set to train on.
-        random : boolean
-            If True, initialize the mean of the Gaussian posteriors
-            randomly.
-        sample_var : float or None
-            Variance of the for the sampling of the intial mean
-            parameters. If None (default), use "var".
 
         Returns
         -------
@@ -99,16 +90,9 @@ class PhoneLoop(DiscreteLatentModel):
             priors.append(prior)
 
         components = []
-        if sample_var is not None:
-            s_var = np.ones_like(prior_var) * sample_var
-        else:
-            s_var = var
-        cov = np.diag(s_var)
+        cov = np.diag(prior_var)
         for i in range(tot_comp):
-            if random:
-                s_mean = np.random.multivariate_normal(mean, cov)
-            else:
-                s_mean = prior_mean.copy()
+            s_mean = np.random.multivariate_normal(mean, cov)
             posterior = NormalGamma(
                 s_mean,
                 np.ones_like(mean),
@@ -175,7 +159,7 @@ class PhoneLoop(DiscreteLatentModel):
 
         return state_llh, c_given_s_resps
 
-    def _units_stats(self, c_llhs, log_alphas, log_betas):
+    def units_stats(self, c_llhs, log_alphas, log_betas):
         log_units_stats = np.zeros(self.n_units)
         norm = logsumexp(log_alphas[-1] + log_betas[-1])
         log_A = np.log(self.trans_mat.toarray())
@@ -191,8 +175,11 @@ class PhoneLoop(DiscreteLatentModel):
 
         return np.exp(log_units_stats)
 
-    def decode(self, s_stats, state_path=False):
+    def decode(self, data, state_path=False):
+        s_stats = self.get_sufficient_stats(data)
+
         state_llh, c_given_s_resps = self._get_state_llh(s_stats)
+
         path = viterbi(
             self.init_prob,
             self.trans_mat,
@@ -202,142 +189,10 @@ class PhoneLoop(DiscreteLatentModel):
         )
         if not state_path:
             path = [bisect(self.init_states, state) for state in path]
-            path = [x[0] - 1 for x in groupby(path)]
+            path = [x[0] for x in groupby(path)]
 
         return path
 
-    def set_linear_graph(self, alignments):
-        """Change the recognition structure to match a sequence of the
-        unit.
-
-        Parameters
-        ----------
-        alignments : list of int
-            List of acoustic units.
-
-        Returns
-        -------
-        backup : tuple
-            Backup of the former parameters of the phone-loop model.
-
-        """
-        # Save the current parameters.
-        backup = (
-            self.n_units,
-            self.init_prob,
-            self.trans_mat,
-            self.init_states,
-            self.final_states,
-            self.components
-        )
-
-        # Set the new parameters of the linear recognition model.
-        self.n_units = len(alignments)
-        self.init_prob = np.ones(1, dtype=float)
-        self.trans_mat = create_linear_transition_matrix(len(alignments),
-                                                         self.n_states)
-        self.init_states = [0]
-        self.final_states = [self.trans_mat.shape[0] - 1]
-        self.components = []
-        for i in alignments:
-            for j in range(self.n_states * self.n_comp_per_states):
-                idx = i * (self.n_states * self.n_comp_per_states) + j
-                self.components.append(backup[-1][idx])
-
-        self.state_log_weights = np.zeros((self.n_units * self.n_states,
-                                           self.n_comp_per_states))
-
-        DiscreteLatentModel.post_update(self)
-
-        return backup
-
-    def unset_linear_graph(self, backup):
-        """Restore the previous parameters.
-
-        Parameters
-        ----------
-        parameters : tuple
-            Backup of the parameters to restore.
-
-        """
-        self.n_units = backup[0]
-        self.init_prob = backup[1]
-        self.trans_mat = backup[2]
-        self.init_states = backup[3]
-        self.final_states = backup[4]
-        self.components = backup[5]
-        self.post_update()
-
-    def remap_acc_stats(self, alignments, units_stats, state_stats,
-                        gauss_stats, state_resps, gauss_resps):
-        """Remap the accumulated statistics to their original form.
-
-        Remap the statistics accumulated with a linear model to match
-        the form expected by the standard phone-loop model.
-
-        Parameters
-        ----------
-        alignments : list
-            Units alignments.
-        units_stats : numpy.ndarray
-            Acoustic units counts.
-        state_stats : numpy.ndarray
-            Count for the per-state mixture elements.
-        gauss_stats : numpy.ndarray
-            Gaussian accumulated statistics.
-        state_resps : numpy.ndarray
-            HMM states' posteriorgram.
-
-        Returns
-        -------
-        new_units_stats : numpy.ndarray
-            Acoustic units counts.
-        new_state_stats : numpy.ndarray
-            Count for the per-state mixture elements.
-        new_gauss_stats : numpy.ndarray
-            Gaussian accumulated statistics.
-        new_state_resps : numpy.ndarray
-            HMM states' posteriorgram.
-
-        """
-        new_units_stats = np.zeros(self.n_units)
-        for i, unit in enumerate(alignments):
-            new_units_stats[unit] += units_stats[i]
-
-        new_state_stats = np.zeros((self.n_units * self.n_states,
-                                    self.n_comp_per_states))
-        for i, unit in enumerate(alignments):
-            for j in range(self.n_states):
-                idx1 = unit * self.n_states + j
-                idx2 = i * self.n_states + j
-                new_state_stats[idx1, :] += state_stats[idx2, :]
-
-        new_gauss_stats = np.zeros((len(self.components),
-                                   gauss_stats.shape[1]))
-        for i, unit in enumerate(alignments):
-            for j in range(self.n_states * self.n_comp_per_states):
-                idx1 = unit * (self.n_states * self.n_comp_per_states) + j
-                idx2 = i * (self.n_states * self.n_comp_per_states) + j
-                new_gauss_stats[idx1, :] += gauss_stats[idx2, :]
-
-        new_state_resps = np.zeros((self.n_units * self.n_states,
-                                    state_resps.shape[1]))
-        for i, unit in enumerate(alignments):
-            for j in range(self.n_states):
-                idx1 = unit * self.n_states + j
-                idx2 = i * self.n_states + j
-                new_state_resps[idx1, :] += state_resps[idx2, :]
-
-        n_gauss = self.n_units * self.n_states * self.n_comp_per_states
-        new_gauss_resps = np.zeros((n_gauss, state_resps.shape[1]))
-        for i, unit in enumerate(alignments):
-            for j in range(self.n_states * self.n_comp_per_states):
-                idx1 = unit * (self.n_states * self.n_comp_per_states) + j
-                idx2 = i * (self.n_states * self.n_comp_per_states) + j
-                new_gauss_resps[idx1, :] += gauss_resps[idx2, :]
-
-        return new_units_stats, new_state_stats, new_gauss_stats, \
-               new_state_resps, new_gauss_resps
 
     # DiscreteLatentModel interface.
     # -----------------------------------------------------------------
@@ -356,15 +211,7 @@ class PhoneLoop(DiscreteLatentModel):
             retval += post.kl_div(self.state_priors[idx])
         return retval
 
-    def get_posteriors(self, s_stats, ac_scale=1.0, accumulate=False,
-                       alignments=None, gauss_posteriors=False):
-
-        # If the alignments are provided, we use a different regconition
-        # structure.
-        if alignments is not None:
-            backup = self.set_linear_graph(alignments)
-
-        # Compute the per-state expected log-likelihood.
+    def get_posteriors(self, s_stats, accumulate=False):
         state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
         # Forward-Bacward algorithm.
@@ -373,7 +220,7 @@ class PhoneLoop(DiscreteLatentModel):
             self.trans_mat,
             self.init_states,
             self.final_states,
-            ac_scale * state_llh.T
+            state_llh.T
         )
 
         # Compute the posteriors.
@@ -385,32 +232,16 @@ class PhoneLoop(DiscreteLatentModel):
             tot_resps = state_resps[:, np.newaxis, :] * c_given_s_resps
             gauss_resps = tot_resps.reshape(-1, tot_resps.shape[-1])
             if self.n_states > 1 :
-                units_stats = self._units_stats(state_llh, log_alphas,
-                                                log_betas)
+                units_stats = self.units_stats(state_llh, log_alphas,
+                                               log_betas)
             else:
-                units_stats = state_resps.sum(axis=0)
+                units_stats = resps.sum(axis=0)
+
             state_stats = tot_resps.sum(axis=2)
             gauss_stats = gauss_resps.dot(s_stats)
-
-            # If we use a linear recognition model, remap the
-            # accumulated statistics to their actual values.
-            if alignments is not None:
-                self.unset_linear_graph(backup)
-                units_stats, state_stats, gauss_stats, state_resps, \
-                gauss_resps = \
-                    self.remap_acc_stats(alignments, units_stats, state_stats,
-                                         gauss_stats, state_resps, gauss_resps)
-
             acc_stats = EFDStats([units_stats, state_stats, gauss_stats])
-            if gauss_posteriors:
-                retval_resps = gauss_resps
-            else:
-                retval_resps = state_resps
 
-            return retval_resps, log_norm[-1], acc_stats
-
-        if alignments is not None:
-            self.unset_linear_graph(backup)
+            return state_resps, log_norm[-1], acc_stats
 
         return state_resps, log_norm[-1]
 
@@ -438,73 +269,5 @@ class PhoneLoop(DiscreteLatentModel):
 
         self.post_update()
 
-    # PersistentModel interface implementation.
     # -----------------------------------------------------------------
 
-    def to_dict(self):
-        return {
-            'class':self.__class__,
-            'n_units': self.n_units,
-            'n_states': self.n_states,
-            'n_comp_per_states': self.n_comp_per_states,
-            'latent_prior_class': self.latent_prior.__class__,
-            'latent_prior_data': self.latent_prior.to_dict(),
-            'latent_posterior_class': self.latent_posterior.__class__,
-            'latent_posterior_data': self.latent_posterior.to_dict(),
-            'state_prior_class': self.state_priors[0].__class__,
-            'state_prior_data': [state_prior.to_dict() for state_prior in
-                                 self.state_priors],
-            'state_posterior_class': self.state_posteriors[0].__class__,
-            'state_posterior_data': [state_posterior.to_dict()
-                                     for state_posterior in
-                                     self.state_posteriors],
-            'components_class': self.components[0].__class__,
-            'components': [comp.to_dict() for comp in self.components]
-        }
-
-    @classmethod
-    def load_from_dict(cls, model_data):
-        model = cls.__new__(model_data['class'])
-
-        model.n_units = model_data['n_units']
-        model.n_states = model_data['n_states']
-        model.n_comp_per_states = model_data['n_comp_per_states']
-
-        latent_prior_cls = model_data['latent_prior_class']
-        latent_prior_data = model_data['latent_prior_data']
-        model.latent_prior = \
-            latent_prior_cls.load_from_dict(latent_prior_data)
-
-        latent_posterior_cls = model_data['latent_posterior_class']
-        latent_posterior_data = model_data['latent_posterior_data']
-        model.latent_posterior = \
-            latent_posterior_cls.load_from_dict(latent_posterior_data)
-
-        state_prior_cls = model_data['state_prior_class']
-        state_priors = []
-        for data in model_data['state_prior_data']:
-            state_priors.append(
-                state_prior_cls.load_from_dict(data)
-            )
-        model.state_priors = state_priors
-
-        state_posterior_cls = model_data['state_posterior_class']
-        state_posteriors = []
-        for data in model_data['state_posterior_data']:
-            state_posteriors.append(
-                state_posterior_cls.load_from_dict(data)
-            )
-        model.state_posteriors = state_posteriors
-
-        components = []
-        components_class = model_data['components_class']
-        for comp_data in model_data['components']:
-            comp = components_class.load_from_dict(comp_data)
-            components.append(comp)
-        model.components = components
-
-        model.post_update()
-
-        return model
-
-    # -----------------------------------------------------------------

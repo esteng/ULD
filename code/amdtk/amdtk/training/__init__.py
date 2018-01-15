@@ -5,6 +5,5 @@ features to automatically discover phone-like units.
 
 """
 
-from .mixture import Mixture
-from .phone_loop import PhoneLoop
+from .inference import StochasticVBOptimizer
 

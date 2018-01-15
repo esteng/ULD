@@ -1,6 +1,6 @@
 
 """
-Base class for the generative structured Bayesian models.
+Base class for the generative / discriminative models.
 
 Copyright (C) 2017, Lucas Ondel
 
@@ -28,7 +28,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import abc
 import numpy as np
 from ..io.persistent_model import PersistentModel
-from ..io.features_loader import FeaturesPreprocessor
 
 
 class EFDStats(object):
@@ -72,7 +71,7 @@ class DiscreteLatentModel(PersistentModel, metaclass=abc.ABCMeta):
 
     NOTE
     ----
-    This implementation assumes the joint distribution of the
+    This implementation assume the joint distribution of the
     data and the latent variables to be a member of the Exponential
     family of distribution.
 
@@ -222,7 +221,7 @@ class DiscreteLatentModel(PersistentModel, metaclass=abc.ABCMeta):
         self._exp_np_matrix = self._get_components_params_matrix()
 
     @abc.abstractmethod
-    def get_posteriors(self, s_stats, accumulate=False, alignments=None):
+    def get_posteriors(self, s_stats, accumulate=False):
         """Compute the posterior distribution of the latent variables.
 
         Parameters
@@ -232,10 +231,6 @@ class DiscreteLatentModel(PersistentModel, metaclass=abc.ABCMeta):
         accumulate : boolean
             If True, accumulate the sufficient statistics based on the
             posteriors.
-        alignemnts : list of int
-            List of index corresponding to the "true" value of the
-            latent variable. The exact interpreation of these
-            alignments may vary according to the model.
 
         Returns
         -------
@@ -253,30 +248,21 @@ class DiscreteLatentModel(PersistentModel, metaclass=abc.ABCMeta):
         """
         pass
 
-    # Features interface implementation.
-    # -----------------------------------------------------------------
-
-    def transform_features(self, data):
-        return self.get_sufficient_stats(data)
-
     # PersistentModel interface implementation.
     # -----------------------------------------------------------------
 
     def to_dict(self):
         return {
-            'class':self.__class__,
             'latent_prior_class': self.latent_prior.__class__,
             'latent_prior_data': self.latent_prior.to_dict(),
-            'latent_posterior_class': self.latent_posterior.__class__,
-            'latent_posterior_data': self.latent_posterior.to_dict(),
+            'posterior_class': self.latent_posterior.__class__,
+            'posterior_data': self.latent_posterior.to_dict(),
             'components_class': self.components[0].__class__,
-            'components': [comp.to_dict() for comp in self.components]
+            'components': [comp.to_dict() for comp in components]
         }
 
-    @classmethod
+    @staticmethod
     def load_from_dict(cls, model_data):
-        import pdb
-        pdb.set_trace()
         model = cls.__new__(model_data['class'])
         latent_prior_cls = model_data['latent_prior_class']
         latent_prior_data = model_data['latent_prior_data']
@@ -292,7 +278,6 @@ class DiscreteLatentModel(PersistentModel, metaclass=abc.ABCMeta):
         components_class = model_data['components_class']
         for comp_data in model_data['components']:
             comp = components_class.load_from_dict(comp_data)
-            components.append(comp)
         model.components = components
 
         model.post_update()

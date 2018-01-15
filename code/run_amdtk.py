@@ -61,15 +61,15 @@ dview = rc[:]
 print('Connected to', len(dview), 'jobs.')
 
 #path = ['../audio_test/falr0_sx425.fea']
-paths = ['../audio_test/abonza_lininisa.fea', '../audio_test/falr0_sx425.fea']
+paths = ['../audio/abonza_lininisa.fea'] #, '../audio_test/falr0_sx425.fea']
 
 #path_mask = '../audio_test/test/*fea'
 #paths = [fname for fname in glob.glob(path_mask)]
 #data = amdtk.read_htk(paths[0])
 
 #path_mask = '../audio_test/buckeye/*fea'
-path_mask = '../audio_test/lectures/*fea'
-paths = [fname for fname in glob.glob(path_mask)]
+# path_mask = '../audio_test/lectures/*fea'
+# paths = [fname for fname in glob.glob(path_mask)]
 
 print("Input files:")
 for path in paths:
@@ -82,16 +82,6 @@ data_stats = dview.map_sync(collect_data_stats, paths)
 # Accumulate the statistics over all the utterances.
 final_data_stats = accumulate_stats(data_stats)
 
-print("Creating phone loop model...")
-conc = 0.1
-model = amdtk.PhoneLoop.create(
-    n_units=50,  # number of acoustic units
-    n_states=3,   # number of states per unit
-    n_comp_per_state=4,   # number of Gaussians per emission
-    mean=np.zeros_like(final_data_stats['mean']), 
-    var=np.ones_like(final_data_stats['var']) #,
-    #concentration=conc
-)
 
 
 
@@ -103,14 +93,27 @@ def callback(args):
     time.append(args['time'])
     print('elbo=' + str(elbo[-1]), 'time=' + str(time[-1]))
  
+
+print("Creating phone loop model...")
+conc = 0.1
+model = amdtk.PhoneLoop.create(
+    n_units=50,  # number of acoustic units
+    n_states=3,   # number of states per unit
+    n_comp_per_state=4,   # number of Gaussians per emission
+    mean=np.zeros_like(final_data_stats['mean']), 
+    var=np.ones_like(final_data_stats['var']) #,
+    #concentration=conc
+)
+ 
 print("Creating VB optimizer...")   
 optimizer = amdtk.StochasticVBOptimizer(
     dview, 
     final_data_stats, 
-    {'epochs': 2,
+    args= {'epochs': 2,
      'batch_size': 400,
      'lrate': 0.01},
-    model=model
+    model=model,
+
 )
 
 print("Running VB optimization...")
@@ -164,29 +167,29 @@ for path in paths:
 
     result = model.decode(data, state_path=False)
     result_path = model.decode(data, state_path=True)
-    result_intervals = model.decode(data, phone_intervals=True)
+    # result_intervals = model.decode(data)
     print("---")
     print("Phone sequence for file ", path)
     print(result)
     
-    counts_by_number = {}
-    counts_by_duration = {}
-    for item in result_intervals:
-        phone = item[0]
-        dur = item[2]-item[1]
-        counts_by_number[phone] = counts_by_number.get(phone, 0) + 1
-        counts_by_duration[phone] = counts_by_duration.get(phone, 0) + dur/samples_per_sec
+    # counts_by_number = {}
+    # counts_by_duration = {}
+    # for item in result_intervals:
+    #     phone = item[0]
+    #     dur = item[2]-item[1]
+    #     counts_by_number[phone] = counts_by_number.get(phone, 0) + 1
+    #     counts_by_duration[phone] = counts_by_duration.get(phone, 0) + dur/samples_per_sec
 
-    print("\nTotal number of phones: ",len(counts_by_number.keys()))
-    print("Concentration multiplier: ", conc)
+    # print("\nTotal number of phones: ",len(counts_by_number.keys()))
+    # print("Concentration multiplier: ", conc)
 
-    print("\nPhone counts by number: ")
-    print_bar_graph(counts_by_number)
-    print("\nPhone counts by duration: ")
-    print_bar_graph(counts_by_duration)
+    # print("\nPhone counts by number: ")
+    # print_bar_graph(counts_by_number)
+    # print("\nPhone counts by duration: ")
+    # print_bar_graph(counts_by_duration)
 
 
-    write_textgrids = False
+    write_textgrids = True
 
     if write_textgrids:
         if not os.path.isdir(date_string):

@@ -13,6 +13,6 @@ setup(
         'amdtk/io',
         'amdtk/densities',
         'amdtk/models',
-        'amdtk/interface'
+        'amdtk/training'
     ],
     license='MIT')

@@ -1,29 +1,18 @@
 import numpy as np
+import sys 
 
 class Element(object):
     """docstring for Element"""
     def __init__(self, num_plus):
         super(Element, self).__init__()
-
         self.sub_prob = np.zeros((num_plus))
         self.ins_bot_prob = np.zeros((num_plus))
         self.ins_top_prob = 0
+    def __str__(self):
+        return "sub: {}, ins_bot: {}, ins_top: {}".format(self.sub_prob, self.ins_bot_prob, self.ins_top_prob)
     def cell_sum(self):
         # sum up the whole cell 
-        print(self.sub_prob, self.ins_bot_prob)
-        return sum([sum(self.sub_prob), sum(self.ins_bot_prob)])
-
-class Column(object):
-    """each column corresponds to an observation time-step"""
-    def __init__(self):
-        super(Column, self).__init__()
-        self.elements = []
-        self.sub_sum = 0
-        self.ins_top_sum = 0
-        self.ins_bot_sum = 0
-    def add_element(self, element):
-        self.elements.append(element)
-        self.sub_sum = np.logaddexp(self.sub_sum, element.sub_prob)
+        return sum([sum(self.sub_prob), sum(self.ins_bot_prob), self.ins_top_prob])
 
 class Matrix(object):
     """each row corresponding to a hidden state"""
@@ -38,239 +27,151 @@ class Matrix(object):
         self.obs = set(bottom_string)
         self.num_top = len(self.states)
         self.num_plus = len(self.obs)
-        self.chart = [[Element(self.num_plus)]*(len(self.top_string) + 1)]*(len(self.bottom_string) + 1)
+
+        self.full_chart = [[Element(self.num_plus)for i in range(len(self.top_string) + 1)] for j in range(len(self.bottom_string) + 1)]
+
+        self.forward_chart = [[Element(self.num_plus)for i in range(len(self.top_string) + 1)] for j in range(len(self.bottom_string) + 1)]
+        self.backward_chart = [[Element(self.num_plus)for i in range(len(self.top_string) + 1)] for j in range(len(self.bottom_string) + 1)]
+
         self.column_totals = np.zeros((len(bottom_string)))
 
-        # initialize first one (doesn't matter)
-        self.chart[0][0].ins_top_prob = 1
-        # define dirichlet over all edits
+       # define dirichlet over all edits
         self.operation_pseudocounts = np.ones((3))/3
         self.operation_sufficient_stats = np.zeros((3))
 
         self.ins_bot_pseudocounts = np.ones((self.num_plus))/self.num_plus
         self.ins_bot_sufficient_stats = np.zeros((self.num_plus))
 
-        self.sub_pseudocounts = np.ones((self.num_plus, self.num_top))
-        self.sub_sufficient_stats = np.zeros((self.num_plus, self.num_top))
+        self.sub_pseudocounts = np.ones((self.num_top, self.num_plus, ))
+        self.sub_sufficient_stats = np.zeros((self.num_top, self.num_plus))
 
-        print("initialized a matrix object with")
-        print("ins_bot_pseudocounts")
-        print(self.ins_bot_pseudocounts.shape)
-        print("sub_pseudocounts")
-        print(self.sub_pseudocounts.shape)
+        # initialize first one (doesn't matter)
+        self.forward_chart[0][0].ins_top_prob = 1
+        self.backward_chart[-1][-1].ins_top_prob = 1 
+
+        # initialize first row/column
+        for i in range(1, len(self.bottom_string) + 1):
+            prev_sum = self.forward_chart[i-1][0].cell_sum()
+            self.forward_chart[i][0].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods*self.ins_bot_pseudocounts
+
+        for j in range(1, len(self.top_string) + 1):
+            prev_sum = self.forward_chart[0][j-1].cell_sum()
+            self.forward_chart[0][j].ins_top_prob += prev_sum*self.operation_pseudocounts[0]
+
+
+        for i in range(len(self.bottom_string)-1, -1, -1):
+            prev_sum = self.forward_chart[i+1][0].cell_sum()
+            self.forward_chart[i][0].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods*self.ins_bot_pseudocounts
+
+        for j in range(len(self.top_string)-1, -1, -1):
+            prev_sum = self.forward_chart[0][j+1].cell_sum()
+            self.forward_chart[0][j].ins_top_prob += prev_sum*self.operation_pseudocounts[0]
+
+        # mappings to go from plu/character to index in each list (e.g. the sub list)
         self.plu_to_idx = {x:i for i, x in enumerate(sorted(self.obs))}
         self.idx_to_plu = {i:x for x, i in self.plu_to_idx.items()}
         self.top_to_idx = {x:i for i, x in enumerate(sorted(self.states))}
         self.idx_to_top = {i:x for x, i in self.top_to_idx.items()}
 
-        print("mappings")
-        print(self.plu_to_idx)
-        print(self.idx_to_plu)
-        print(self.top_to_idx)
-        print(self.idx_to_top)
-
     def __str__(self):
-        list_form = [[0]*len(self.chart[0])]*len(self.chart)
-        for i, row in enumerate(self.chart):
+        list_form = [[0 for i in range(len(self.full_chart[0]))] for j in range(len(self.full_chart))]
+        for i, row in enumerate(self.full_chart):
             for j, element in enumerate(row):
-                list_form[i][j] = self.chart[i][j].cell_sum()
+                list_form[i][j] = self.full_chart[i][j].cell_sum()
 
         to_ret = str(list_form)
         return(to_ret)
 
-
-
     def forward(self):
-        # need to make lookup by plu index, not by index in the string
-        for i in range(len(self.bottom_string) + 1):
-            for j in range(len(self.top_string) + 1):
+        # column_totals = [[np.zeros((self.num_top)), np.zeros((self.num_top)), 0]]*len(self.top_string)
+
+        for i in range(1, len(self.bottom_string) + 1):
+            for j in range(1, len(self.top_string) + 1):
                 top_char = self.top_string[j-1]
                 bottom_plu = self.bottom_string[i-1]
                 top_idx = self.top_to_idx[top_char]
                 bottom_idx = self.plu_to_idx[bottom_plu]
-                print(i,j)
                 if abs(i-j) > self.max_edit:
                     continue
                 if i > 0:
-                    print("ins_bot")
                     # insert bottom
-                    to_add = self.chart[i][j-1].cell_sum()*\
+                    to_add = self.forward_chart[i][j-1].cell_sum()*\
                                                         self.operation_pseudocounts[1] *\
                                                             self.ins_bot_pseudocounts[bottom_idx] *\
                                                                 self.likelihoods[bottom_idx]
 
-                    self.chart[i][j].ins_bot_prob[bottom_idx] = to_add
-                    # self.column_totals[i] = np.logaddexp(self.column_totals[i], to_add)
-
-                    self.operation_sufficient_stats[1] += 1
-                    self.ins_bot_sufficient_stats[bottom_idx] += 1
-
+                    self.forward_chart[i][j].ins_bot_prob[bottom_idx] = to_add
+                  
                 if j > 0:
-                    print("ins_top")
                     # insert top
-                    to_add = self.chart[i-1][j].cell_sum() *\
+                    to_add = self.forward_chart[i-1][j].cell_sum() *\
                                                          self.operation_pseudocounts[0]
-                    self.chart[i][j].ins_top_prob = to_add
-                    # self.column_totals[i] = np.logaddexp(self.column_totals[i], to_add)
-                    
-                    self.operation_sufficient_stats[0] += 1
-                
+                    self.forward_chart[i][j].ins_top_prob = to_add
+                  
                 if i > 0 and j > 0:
                     # substitution
-                    print("sub")
-                    to_add = self.chart[i-1][j-1].cell_sum() *\
+                    to_add = self.forward_chart[i-1][j-1].cell_sum() *\
                                                     self.operation_pseudocounts[2] *\
-                                                        self.sub_pseudocounts[bottom_idx][top_idx] * \
+                                                        self.sub_pseudocounts[top_idx][bottom_idx] * \
                                                             self.likelihoods[bottom_idx]
-                    self.chart[i][j].sub_prob[top_idx] = to_add
-                    # self.column_totals[i] = np.logaddexp(self.column_totals[i], to_add)
-
-                    self.operation_sufficient_stats[2] += 1
-                    self.sub_sufficient_stats[bottom_idx][top_idx] += 1
-            # normalize each column when done
-            for j2 in range(len(self.top_string)+1):
-                pass
-                # self.chart[i][j2]. = 
-
-
-
+                    self.forward_chart[i][j].sub_prob[bottom_idx] = to_add
+                    
     def backward(self):
-        pass
+        # fix this, just returns the same thing as the forward
+        for i in range(len(self.bottom_string)-1, -1, -1):
+            for j in range(len(self.top_string)-1, -1, -1): 
+                top_char = self.top_string[j-1]
+                bottom_plu = self.bottom_string[i-1]
+                top_idx = self.top_to_idx[top_char]
+                bottom_idx = self.plu_to_idx[bottom_plu]
+                if abs(i-j) > self.max_edit:
+                    continue
+                if i < len(self.bottom_string):
+                    # insert bottom
+                    to_add = self.backward_chart[i+1][j].cell_sum()*\
+                                                        self.operation_pseudocounts[1] *\
+                                                            self.ins_bot_pseudocounts[bottom_idx] *\
+                                                                self.likelihoods[bottom_idx]
+                    self.backward_chart[i][j].ins_bot_prob[bottom_idx] = to_add
+
+                if j < len(self.top_string):
+                    # insert top
+                    to_add = self.backward_chart[i][j+1].cell_sum() *\
+                                                         self.operation_pseudocounts[0]
+                    self.backward_chart[i][j].ins_top_prob = to_add
+                
+                if i < len(self.bottom_string) and j < len(self.top_string):
+                    # substitution
+                    to_add = self.backward_chart[i+1][j+1].cell_sum() *\
+                                                    self.operation_pseudocounts[2] *\
+                                                        self.sub_pseudocounts[top_idx][bottom_idx] * \
+                                                            self.likelihoods[bottom_idx]
+                    self.backward_chart[i][j].sub_prob[bottom_idx] = to_add
 
     def normalize(self):
         pass
 
     def forward_backward(self):
-        pass
-	"""docstring for Element"""
-	def __init__(self, num_plus):
-		super(Element, self).__init__()
+        self.forward()
+        self.backward()
+        self.matrix_product(self.forward_chart, self.backward_chart)
 
-		self.sub_prob = np.zeros((num_plus))
-		self.ins_bot_prob = np.zeros((num_plus))
-		self.ins_top_prob = 0
-	def cell_sum(self):
-		# sum up the whole cell 
-		return sum([sum(self.sub_prob), sum(self.ins_bot_prob), self.ins_bot_prob])
-
+    def matrix_product(self, forward, backward):
+        for row_idx in range(len(forward)):
+            for col_idx in range(len(forward[row_idx])):
+                self.full_chart[row_idx][col_idx].ins_bot_prob = self.forward_chart[row_idx][col_idx].ins_bot_prob * self.backward_chart[row_idx][col_idx].ins_bot_prob
+                self.full_chart[row_idx][col_idx].sub_prob = self.forward_chart[row_idx][col_idx].sub_prob * self.backward_chart[row_idx][col_idx].sub_prob
+                self.full_chart[row_idx][col_idx].ins_top_prob = self.forward_chart[row_idx][col_idx].ins_top_prob * self.backward_chart[row_idx][col_idx].ins_top_prob
 
 
+if __name__ == '__main__':
+    top_string = ['a','b','c']
+    bottom_string = ['a', 'b', 'b']
+    likelihoods = np.array([.33, .33])
 
-class Column(object):
-	"""each column corresponds to an observation time-step"""
-	def __init__(self):
-		super(Column, self).__init__()
-		self.elements = []
-		self.sub_sum = 0
-		self.ins_top_sum = 0
-		self.ins_bot_sum = 0
-	def add_element(self, element):
-		self.elements.append(element)
-		self.sub_sum = np.logaddexp(self.sub_sum, element.sub_prob)
+    m = Matrix(top_string,bottom_string, likelihoods, 2)
+    m.forward_backward()
 
-
-
-
-class Matrix(object):
-	"""each row corresponding to a hidden state"""
-	def __init__(self, top_string, bottom_string, likelihoods, max_edit):
-		super(Matrix, self).__init__()
-		self.top_string = top_string
-		self.bottom_string = bottom_string	
-		self.max_edit = max_edit
-		self.likelihoods = likelihoods
-
-		self.states = set(top_string)
-		self.obs = set(bottom_string)
-		self.num_top = len(self.states)
-		self.num_plus = len(self.obs)
-		self.chart = [[Element(self.num_plus)]*len(self.states)]*len(self.bottom_string)
-		self.column_totals = np.zeros((len(bottom_string)))
-
-		# initialize first one (doesn't matter)
-		self.chart[0][0].ins_top_prob = 1
-		# define dirichlet over all edits
-		self.operation_pseudocounts = np.ones((3))/3
-		self.operation_sufficient_stats = np.zeros((3))
-
-		self.ins_bot_pseudocounts = np.ones((self.num_plus))/self.num_plus
-		self.ins_bot_sufficient_stats = np.zeros((self.num_plus))
-
-		self.sub_pseudocounts = np.ones((self.num_plus, self.num_top))
-		self.sub_sufficient_stats = np.zeros((self.num_plus, self.num_top))
-
-		print("initialized a matrix object with")
-		print("chart:")
-		print(self.chart)
-		print("ins_bot_pseudocounts")
-		print(self.ins_bot_pseudocounts.shape)
-		print("sub_pseudocounts")
-		print(self.sub_pseudocounts.shape)
-
-
-	def forward(self):
-		# need to make lookup by plu index, not by index in the string
-		for i in range(len(self.bottom_string) + 1):
-			for j in range(len(self.top_string) + 1):
-				if abs(i-j) > self.max_edit:
-					continue
-				if i > 0:
-					# insert bottom
-					to_add = self.chart[i][j-1].cell_sum()*\
-														self.operation_pseudocounts[1] *\
-															self.ins_bot_pseudocounts[i] *\
-																self.likelihoods[i]
-
-					self.chart[i][j].ins_bot_prob = to_add
-					# self.column_totals[i] = np.logaddexp(self.column_totals[i], to_add)
-
-					self.operation_sufficient_stats[1] += 1
-					self.ins_bot_sufficient_stats[i] += 1
-
-				if j > 0:
-					# insert top
-					to_add = self.chart[i-1][j].cell_sum() *\
-														 self.operation_pseudocounts[0]
-					self.chart[i][j].ins_top_prob = to_add
-					# self.column_totals[i] = np.logaddexp(self.column_totals[i], to_add)
-					
-					self.operation_sufficient_stats[0] += 1
-				
-				if i > 0 and j > 0:
-					# substitution
-					to_add = self.chart[i-1][j-1].cell_sum() *\
-													self.operation_pseudocounts[2] *\
-														self.sub_pseudocounts[i][j] * \
-															self.likelihoods[i]
-					self.chart[i][j].sub_prob = to_add
-					# self.column_totals[i] = np.logaddexp(self.column_totals[i], to_add)
-
-					self.operation_sufficient_stats[2] += 1
-					self.sub_sufficient_stats[i][i] += 1
-			# normalize each column when done
-			for j2 in range(len(self.top_string)+1):
-				pass
-				# self.chart[i][j2]. = 
-
-
-
-	def backward(self):
-		pass
-
-	def normalize(self):
-		pass
-
-	def forward_backward(self):
-		pass
-
-
-top_string = ['a','b','c']
-bottom_string = ['a', 'b', 'b']
-likelihoods = [.33, .33, .33]
-
-m = Matrix(top_string,bottom_string, likelihoods, 2)
-m.forward()
-
-print(m)
+    print(m)
         
-		
+        

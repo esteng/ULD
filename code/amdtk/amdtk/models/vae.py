@@ -31,180 +31,141 @@ import pickle
 import numpy as np
 import theano
 import theano.tensor as T
-from ..io import PersistentModel
+from .model import PersistentModel
 from .mlp_utils import GaussianNeuralNetwork
 from .mlp_utils import NeuralNetwork
 
 
-class SVAE(PersistentModel):
+class SVAE(object):
 
-    def __init__(self, encoder_struct, decoder_struct, prior_latent,
-                n_samples=10):
+    def __init__(self, encoder_structure, decoder_structure,
+                 prior, var_reg=-1, no_llh=False, kl_weights=1.,
+                 classifier_structure=None):
+        self.encoder = GaussianNeuralNetwork(encoder_structure, [])
+        self.params = self.encoder.params
+        if not no_llh:
+            self.decoder = GaussianNeuralNetwork(decoder_structure, [],
+                                                 self.encoder.sample)
+            self.params += self.decoder.params
 
-        self.n_samples = n_samples
-        self.encoder_struct = encoder_struct
-        self.decoder_struct = decoder_struct
-        self.prior_latent = prior_latent
+        self.var_reg = var_reg
+        self.no_llh = no_llh
+        self.kl_weights = kl_weights
+        self.prior = prior
+        if classifier_structure is not None:
+            self.classifier = classifier_structure
+            #self.classifier = NeuralNetwork(classifier_structure, [],
+            #                                self.encoder.sample)
+            #self.params += self.classifier.params
+        else:
+            self.classifier = None
 
         self._build()
 
     def _build(self):
-        self.encoder = GaussianNeuralNetwork(self.encoder_struct,
-                                             n_samples=self.n_samples)
-        self.decoder = GaussianNeuralNetwork(self.decoder_struct,
-                                             self.encoder.sample)
-        self.params = self.encoder.params + self.decoder.params
-
-        # Mean and variance of the decoder.
-        mean = T.reshape(
-            self.decoder.mean,
-            (self.encoder.n_samples, self.encoder.mean.shape[0], -1)
-        )
-        var = T.reshape(
-            self.decoder.var,
-            (self.encoder.n_samples, self.encoder.mean.shape[0], -1)
-        )
-
-        # Log-likelihood.
-        targets = self.encoder.inputs
-        llh = -.5 * T.sum(T.log(var).mean(axis=0), axis=1)
-        llh += -.5 * T.sum((((targets - mean) ** 2) / var).mean(axis=0),
-                           axis=1)
-        llh = T.sum(llh)
-
-        # Mean and variance of the encoder (variational distribution).
-        mean = self.encoder.mean
-        var = self.encoder.var
+        post_mean = self.encoder.mean
+        post_var = self.encoder.var
 
         # KL divergence posterior/prior.
         prior_mean = T.matrix(dtype=theano.config.floatX)
         prior_var = T.matrix(dtype=theano.config.floatX)
-        kl_div = .5 * T.log(prior_var / var) - .5
-        kl_div += ((prior_mean - mean)**2 + var) / (2 * prior_var)
-        kl_div = T.sum(kl_div)
+        kl_div = (.5 * (prior_mean - post_mean)**2) / prior_var
+        ratio = post_var / prior_var
+        kl_div += .5 * (ratio - 1 - T.log(ratio))
+        kl_div = T.sum(kl_div, axis=1)
 
-        # Variational objective function.
-        objective = llh - kl_div
+        # Log-likelihood of the data (up to a constant).
+        if not self.no_llh:
+            targets = self.encoder.inputs
+            mean = self.decoder.outputs
+            var = self.decoder.var
+            llh = -.5 * T.sum(T.log(var), axis=1)
+            llh += -.5 * T.sum(((targets - mean) ** 2) / var, axis=1)
+            if self.var_reg > 0:
+                llh += T.sum(T.log(self.var_reg) - self.var_reg * var, axis=1)
+        else:
+            llh = 0.
 
-        # Gradient function of the neural network.
+        # Evidence Lower-Bound.
+        resps = T.matrix()
+        #if self.classifier is not None:
+            #classifier_llh = T.sum(resps * T.log(self.classifier.outputs), axis=1)
+            #llh += classifier_llh
+
+            #self.classify = theano.function(
+            #    inputs=[self.encoder.inputs],
+            #    outputs=T.argmax(self.classifier.outputs, axis=1)
+            #)
+
+        #s_stats = T.concatenate([post_var + post_mean**2, post_mean], axis=1)
+        s_stats = T.concatenate([self.encoder.sample**2, self.encoder.sample], axis=1)
+        pad_s_stats = T.concatenate([s_stats, T.ones_like(s_stats)], axis=1)
+        prediction = self.prior.sym_classify(pad_s_stats)
+        classifier_llh = T.sum(resps * T.log(prediction), axis=1)
+        if self.classifier is not None:
+            llh += classifier_llh
+
+        elbo = T.sum(llh - self.kl_weights * kl_div)
+
         self._get_gradients = theano.function(
-            inputs=[self.encoder.inputs, prior_mean, prior_var],
-            outputs=[objective] + \
-                [T.grad(objective, param) for param in self.params],
+            inputs=[self.encoder.inputs, prior_mean, prior_var, resps],
+            outputs=[T.sum(llh), self.kl_weights * T.sum(kl_div)] + \
+                [T.grad(elbo, param) for param in self.params],
+            on_unused_input='ignore'
         )
 
-        # Forward and input to the encoder network.
-        self.forward = theano.function(
+        self.classify = theano.function(
             inputs=[self.encoder.inputs],
-            outputs=[mean, var]
+            outputs=T.argmax(prediction, axis=1)
         )
 
-    def generate_features(self, data):
-        mean, var, predictions = self.forward(data)
+    def decode(self, prior, data, state_path=False):
+        mean, var = self.encoder.forward(data)
+        return prior.decode(mean, state_path)
 
-        # Expected value of the sufficient statistics.
-        s_stats = np.c_[mean**2 + var, mean,
-                        np.ones((len(mean), 2 * mean.shape[1]))]
-
-        return s_stats
-
-    def decode(self, data, state_path=False):
-        mean, var = self.forward(data)
-
-        # Expected value of the sufficient statistics.
-        s_stats = np.c_[mean**2 + var, mean,
-                        np.ones((len(mean), 2 * mean.shape[1]))]
-
-        # Clustering.
-        return self.prior_latent.decode(s_stats, state_path=state_path)
-
-    def get_posteriors(self, data, ac_scale=1.0):
-        mean, var = self.forward(data)
+    def classify(self, prior, data):
+        mean, var = self.encoder.forward(data)
 
         # Expected value of the sufficient statistics.
         s_stats = np.c_[mean**2 + var, mean,
                         np.ones((len(mean), 2 * mean.shape[1]))]
 
         # Clustering.
-        return self.prior_latent.get_posteriors(s_stats, ac_scale=1.0)
+        log_norm, resps, acc_stats = prior.get_resps(s_stats)
 
-    def _get_state_llh(self, data):
-        mean, var = self.forward(data)
+        return resps[0].T.argmax(axis=1)
 
-        # Expected value of the sufficient statistics.
-        s_stats = np.c_[mean**2 + var, mean,
-                        np.ones((len(mean), 2 * mean.shape[1]))]
+    def get_gradients(self, prior, data, log_resps=None):
+        mean, var = self.encoder.forward(data)
 
-        return self.prior_latent._get_state_llh(s_stats)
-
-    def get_gradients(self, data, alignments=None):
-        mean, var = self.forward(data)
 
         # Expected value of the sufficient statistics.
         s_stats = np.c_[mean**2 + var, mean,
                         np.ones((len(mean), 2 * mean.shape[1]))]
 
         # Clustering.
-        posts, _, acc_stats = \
-            self.prior_latent.get_posteriors(s_stats, accumulate=True,
-                                             alignments=alignments,
-                                             gauss_posteriors=True)
-        print(posts.shape)
+        log_norm, resps, acc_stats = prior.get_resps(s_stats, log_resps)
+        #log_norm, resps, acc_stats = prior.get_resps(s_stats)
 
         # Expected value of the prior's components parameters.
         dim_latent = self.encoder.layers[-1].dim_out
         p_np1 = [comp.posterior.grad_log_partition[:dim_latent]
-                 for comp in self.prior_latent.components]
+                 for comp in prior.components]
         p_np2 = [comp.posterior.grad_log_partition[dim_latent:2 * dim_latent]
-                 for comp in self.prior_latent.components]
-        q_np1 = posts.T.dot(p_np1)
-        q_np2 = posts.T.dot(p_np2)
+                 for comp in prior.components]
+        q_np1 = resps[0].T.dot(p_np1)
+        q_np2 = resps[0].T.dot(p_np2)
 
         # Convert the natural parameters to the standard parameters.
         prior_var = -1 / (2 * q_np1)
         prior_mean = q_np2 * prior_var
 
-        # Gradients of the objective function w.r.t. the parameters of
-        # the neural network (encoder + decoder).
-        val_and_grads = self._get_gradients(data, prior_mean, prior_var)
-        objective, grads = val_and_grads[0], val_and_grads[1:]
-
-        return objective, acc_stats, grads
-
-    # Features interface implementation.
-    # -----------------------------------------------------------------
-
-    def transform_features(self, data):
-        return data
-
-    # PersistentModel interface implementation.
-    # -----------------------------------------------------------------
-
-    def to_dict(self):
-        return {
-            'prior_latent_class': self.prior_latent.__class__,
-            'prior_latent_data': self.prior_latent.to_dict(),
-            'encoder_struct': self.encoder_struct,
-            'decoder_struct': self.decoder_struct,
-            'n_samples': self.n_samples,
-            'params': [param.get_value() for param in self.params]
-        }
-
-    @classmethod
-    def load_from_dict(cls, model_data):
-        encoder_struct = model_data['encoder_struct']
-        decoder_struct = model_data['decoder_struct']
-        prior_latent_cls = model_data['prior_latent_class']
-        prior_latent = prior_latent_cls.load_from_dict(
-            model_data['prior_latent_data']
-        )
-        n_samples = model_data['n_samples']
-        model = SVAE(encoder_struct, decoder_struct, prior_latent, n_samples)
-        params = model_data['params']
-        for i, param in enumerate(model.params):
-            param.set_value(params[i])
-
-        return model
+        val_and_grads = self._get_gradients(data, prior_mean, prior_var,
+                                            resps[0].T)
+        #val_and_grads = self._get_gradients(data, prior_mean, prior_var,
+        #                                    np.exp(log_resps))
+        return val_and_grads[0] - val_and_grads[1], val_and_grads[2:], \
+               acc_stats
 
 
 class MLPClassifier(object):
@@ -212,6 +173,7 @@ class MLPClassifier(object):
     def __init__(self, structure):
         self.nnet = NeuralNetwork(structure, [])
         self.params = self.nnet.params
+
         self._build()
 
     def _build(self):
@@ -220,6 +182,7 @@ class MLPClassifier(object):
         resps = T.matrix()
         prediction = self.nnet.outputs
         llh = T.sum(resps * T.log(prediction))
+
 
         self._get_gradients = theano.function(
             inputs=[self.nnet.inputs, resps],

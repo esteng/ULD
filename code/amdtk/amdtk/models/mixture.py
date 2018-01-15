@@ -28,8 +28,6 @@ DEALINGS IN THE SOFTWARE.
 
 import numpy as np
 from scipy.special import logsumexp
-import theano
-import theano.tensor as T
 from .model import EFDStats, DiscreteLatentModel
 from ..densities import Dirichlet, NormalGamma, NormalDiag
 
@@ -69,7 +67,7 @@ class Mixture(DiscreteLatentModel):
                 prior_mean,
                 np.ones_like(mean),
                 np.ones_like(var),
-                1 / prior_var,
+                prior_var,
             )
             priors.append(prior)
 
@@ -84,7 +82,7 @@ class Mixture(DiscreteLatentModel):
                 s_mean,
                 np.ones_like(mean),
                 np.ones_like(var),
-                1 / prior_var
+                prior_var
             )
             components.append(NormalDiag(priors[i], posterior))
 
@@ -97,7 +95,7 @@ class Mixture(DiscreteLatentModel):
     # DiscreteLatentModel interface implementation.
     # -----------------------------------------------------------------
 
-    def get_posteriors(self, s_stats, accumulate=False, alignments=None):
+    def get_posteriors(self, s_stats, accumulate=False):
         # Expected value of the log-likelihood.
         exp_llh = self.components_exp_llh(s_stats)
         exp_llh += self.latent_posterior.grad_log_partition[:, np.newaxis]
@@ -108,17 +106,13 @@ class Mixture(DiscreteLatentModel):
 
         # Accumulate the responsibilties if requested.
         if accumulate:
-            if alignments is not None:
-                resps = np.zeros_like(resps)
-                idxs = np.arange(0, len(resps))
-                resps[idxs, alignemnts] = 1.
             acc_stats1 = resps.T.sum(axis=0)
             acc_stats2 = resps.dot(s_stats)
             acc_stats = EFDStats([acc_stats1, acc_stats2])
 
-            return resps.T, log_norm, acc_stats
+            return resps, log_norm, acc_stats
 
-        return resps.T, log_norm
+        return resps, log_norm
 
     # -----------------------------------------------------------------
 
