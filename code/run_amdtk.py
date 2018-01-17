@@ -8,9 +8,13 @@ from bokeh.io import output_notebook
 from bokeh.plotting import figure
 from bokeh.layouts import gridplot
 from ipyparallel import Client
+
+import sys
+sys.path.insert(0, 'amdtk')
 import amdtk
 
 print("successfully completed imports")
+amdtk.utils.test_import()
 
 # I assume the reason this is parallelized is because
 # for large amounts of data it could be very slow?
@@ -61,10 +65,12 @@ dview = rc[:]
 print('Connected to', len(dview), 'jobs.')
 
 #path = ['../audio_test/falr0_sx425.fea']
-paths = ['../audio/abonza_lininisa.fea'] #, '../audio_test/falr0_sx425.fea']
+#paths = ['../audio/abonza_lininisa.fea'] #, '../audio_test/falr0_sx425.fea']
 
-#path_mask = '../audio_test/test/*fea'
-#paths = [fname for fname in glob.glob(path_mask)]
+path_mask = '../audio/*fea'
+paths = [os.path.abspath(fname) for fname in glob.glob(path_mask)]
+
+
 #data = amdtk.read_htk(paths[0])
 
 #path_mask = '../audio_test/buckeye/*fea'
@@ -136,6 +142,7 @@ print("\nDECODING\n")
 
 date_string = systime.strftime("textgrids_%Y-%m-%d_%H:%M")
 
+# Need to change this according to 
 samples_per_sec = 100
 
 def print_bar_graph(dictionary, max_x=20):
@@ -167,10 +174,12 @@ for path in paths:
 
     result = model.decode(data, state_path=False)
     result_path = model.decode(data, state_path=True)
-    # result_intervals = model.decode(data)
+    result_intervals = model.decode(data, phone_intervals=True)
     print("---")
-    print("Phone sequence for file ", path)
+    print("Phone sequence for file", path, ":")
     print(result)
+
+    #print(result_intervals)
     
     # counts_by_number = {}
     # counts_by_duration = {}
@@ -192,11 +201,14 @@ for path in paths:
     write_textgrids = True
 
     if write_textgrids:
-        if not os.path.isdir(date_string):
-            os.mkdir(date_string)
+        output_dir = os.path.join('..', 'audio', date_string)
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
         amdtk.utils.write_textgrid(result_intervals, 
                                     samples_per_sec, 
-                                    os.path.join(date_string, os.path.split(path)[1][:-4]+'.TextGrid'))
+                                    os.path.join(output_dir, os.path.split(path)[1][:-4]+'.TextGrid'))
+
+        print("Wrote textgrids to", output_dir)
 
 print("success")
 
