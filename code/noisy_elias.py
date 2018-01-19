@@ -54,20 +54,19 @@ class Matrix(object):
         # initialize first row/column
         for i in range(1, len(self.bottom_string) + 1):
             prev_sum = self.forward_chart[i-1][0].cell_sum()
-            self.forward_chart[i][0].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods*self.ins_bot_pseudocounts
+            self.forward_chart[i][0].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods[i-1]*self.ins_bot_pseudocounts
 
         for j in range(1, len(self.top_string) + 1):
             prev_sum = self.forward_chart[0][j-1].cell_sum()
             self.forward_chart[0][j].ins_top_prob += prev_sum*self.operation_pseudocounts[0]
 
-
         for i in range(len(self.bottom_string)-1, -1, -1):
-            prev_sum = self.forward_chart[i+1][0].cell_sum()
-            self.forward_chart[i][0].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods*self.ins_bot_pseudocounts
+            prev_sum = self.backward_chart[i+1][-1].cell_sum()
+            self.backward_chart[i][-1].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods[i]*self.ins_bot_pseudocounts
 
         for j in range(len(self.top_string)-1, -1, -1):
-            prev_sum = self.forward_chart[0][j+1].cell_sum()
-            self.forward_chart[0][j].ins_top_prob += prev_sum*self.operation_pseudocounts[0]
+            prev_sum = self.backward_chart[-1][j+1].cell_sum()
+            self.backward_chart[-1][j].ins_top_prob += prev_sum*self.operation_pseudocounts[0]
 
 
         # mappings to go from plu/character to index in each list (e.g. the sub list)
@@ -109,7 +108,7 @@ class Matrix(object):
                                                             self.ins_bot_pseudocounts[bottom_idx] *\
                                                                 self.likelihoods[bottom_idx]
 
-                    self.forward_chart[i][j].ins_bot_prob[bottom_idx] = to_add
+                    self.forward_chart[i][j].ins_bot_prob = to_add
                   
                 if j > 0:
                     # insert top
@@ -123,7 +122,7 @@ class Matrix(object):
                                                     self.operation_pseudocounts[2] *\
                                                         self.sub_pseudocounts[top_idx][bottom_idx] * \
                                                             self.likelihoods[bottom_idx]
-                    self.forward_chart[i][j].sub_prob[bottom_idx] = to_add
+                    self.forward_chart[i][j].sub_prob = to_add
                     
     def backward(self):
         # fix this, just returns the same thing as the forward
@@ -141,7 +140,7 @@ class Matrix(object):
                                                         self.operation_pseudocounts[1] *\
                                                             self.ins_bot_pseudocounts[bottom_idx] *\
                                                                 self.likelihoods[bottom_idx]
-                    self.backward_chart[i][j].ins_bot_prob[bottom_idx] = to_add
+                    self.backward_chart[i][j].ins_bot_prob = to_add
 
                 if j < len(self.top_string):
                     # insert top
@@ -155,7 +154,7 @@ class Matrix(object):
                                                     self.operation_pseudocounts[2] *\
                                                         self.sub_pseudocounts[top_idx][bottom_idx] * \
                                                             self.likelihoods[bottom_idx]
-                    self.backward_chart[i][j].sub_prob[bottom_idx] = to_add
+                    self.backward_chart[i][j].sub_prob = to_add
 
     def forward_backward(self):
         self.forward()
@@ -172,8 +171,6 @@ class Matrix(object):
     def decode(self): 
         pass
 
-
-
 def pprint_chart(chart):
     list_form = [[0 for i in range(len(chart[0]))] for j in range(len(chart))]
     for i, row in enumerate(chart):
@@ -185,8 +182,6 @@ def pprint_chart(chart):
         print(str_row)
     # print(to_ret)
 
-
-
 if __name__ == '__main__':
     top_string = ['a','b','c']
     bottom_string = ['a', 'b', 'b']
@@ -194,18 +189,17 @@ if __name__ == '__main__':
     # likelihoods = np.array([[.8, .1, .1], [.33333, .333333, .33333], [.1, .1, .8]])
     likelihoods = np.array([[.9, .1],[.5,.5],[.1,.9]])
 
-
     m = Matrix(top_string,bottom_string, likelihoods, 2)
     full_chart = m.forward_backward()
     print("forward")
-    pprint_chart(full_chart)
-    # print("backward")
-    # m.pprint_chart(m.backward_chart)
-    # print("combined")
-    # m.pprint_chart(m.full_chart)
-    # print(m.full_chart[-1][-1])
+    pprint_chart(m.forward_chart)
+    print("backward")
+    pprint_chart(m.backward_chart)
+    print("combined")
+    pprint_chart(m.full_chart)
+    # # print(m.full_chart[-1][-1])
 
-    for i, row in enumerate(m.forward_chart):
-        for j, e in enumerate(row):
-            print(i, j, e, e.contribs)
+    # for i, row in enumerate(m.forward_chart):
+    #     for j, e in enumerate(row):
+    #         print(i, j, e, e.contribs)
 
