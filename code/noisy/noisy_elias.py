@@ -1,6 +1,7 @@
 import numpy as np
 import sys 
 from generate_ab_data import generate_data
+from utils import log_arr_sum, pprint_chart
 
 class Element(object):
     """
@@ -14,17 +15,23 @@ class Element(object):
     """
     def __init__(self, num_plus, top):
         super(Element, self).__init__()
+        np.seterr(divide='ignore')
+
         self.top_plu = top
-        self.sub_prob = np.zeros((num_plus))
-        self.ins_bot_prob = np.zeros((num_plus))
-        self.ins_top_prob = 0
+        # logify
+        self.sub_prob = np.log(np.zeros((num_plus)))
+        self.ins_bot_prob = np.log(np.zeros((num_plus)))
+        self.ins_top_prob = np.log(0)
         self.contribs = {"i-1":0, "j-1": 0, "i-1,j-1": 0}
 
     def __str__(self):
-        return "sub: {}, ins_bot: {}, ins_top: {}".format(self.sub_prob, self.ins_bot_prob, self.ins_top_prob)
+        return "sub: {}, ins_bot: {}, ins_top: {}".format(np.exp(self.sub_prob), np.exp(self.ins_bot_prob),
+         np.exp(self.ins_top_prob))
+  
+
     def cell_sum(self):
         # sum up the whole cell 
-        return sum([sum(self.sub_prob), sum(self.ins_bot_prob), self.ins_top_prob])
+        return log_arr_sum([log_arr_sum(self.sub_prob), log_arr_sum(self.ins_bot_prob), self.ins_top_prob])
 
 class Matrix(object):
     """A Matrix stores/aggregates the pseudocounts for each operation"""
@@ -52,25 +59,29 @@ class Matrix(object):
         self.sub_pseudocounts = prob_dict["sub"]
 
         # initialize first one (doesn't matter how it's initialized since it's P(aligning nothing w/ nothing))
-        self.forward_chart[0][0].ins_top_prob = 1
-        self.backward_chart[-1][-1].ins_top_prob = 1 
+        self.forward_chart[0][0].ins_top_prob = np.log(1)
+        self.backward_chart[-1][-1].ins_top_prob = np.log(1)
 
         # initialize first row/column
         for i in range(1, self.bottom_string_length + 1):
             prev_sum = self.forward_chart[i-1][0].cell_sum()
-            self.forward_chart[i][0].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods[i-1]*self.ins_bot_pseudocounts
+            self.forward_chart[i][0].ins_bot_prob = np.logaddexp(self.forward_chart[i][0].ins_bot_prob,\
+                prev_sum*self.operation_pseudocounts[1]+self.likelihoods[i-1]+self.ins_bot_pseudocounts)
 
         for j in range(1, len(self.top_string) + 1):
             prev_sum = self.forward_chart[0][j-1].cell_sum()
-            self.forward_chart[0][j].ins_top_prob += prev_sum*self.operation_pseudocounts[0]
+            self.forward_chart[0][j].ins_top_prob = np.logaddexp(self.forward_chart[0][j].ins_top_prob,\
+                 prev_sum+self.operation_pseudocounts[0])
 
         for i in range(self.bottom_string_length-1, -1, -1):
             prev_sum = self.backward_chart[i+1][-1].cell_sum()
-            self.backward_chart[i][-1].ins_bot_prob += prev_sum*self.operation_pseudocounts[1]*self.likelihoods[i]*self.ins_bot_pseudocounts
+            self.backward_chart[i][-1].ins_bot_prob = np.logaddexp(self.backward_chart[i][-1].ins_bot_prob, \
+                prev_sum+self.operation_pseudocounts[1]+self.likelihoods[i]+self.ins_bot_pseudocounts)
 
         for j in range(len(self.top_string)-1, -1, -1):
             prev_sum = self.backward_chart[-1][j+1].cell_sum()
-            self.backward_chart[-1][j].ins_top_prob += prev_sum*self.operation_pseudocounts[0]
+            self.backward_chart[-1][j].ins_top_prob = np.logaddexp(self.backward_chart[-1][j].ins_top_prob , \
+                prev_sum+self.operation_pseudocounts[0])
 
         # fill in the top string:
         for j in range(1, len(self.top_string) + 1):
@@ -87,7 +98,7 @@ class Matrix(object):
         list_form = [[0 for i in range(len(self.full_chart[0]))] for j in range(len(self.full_chart))]
         for i, row in enumerate(self.full_chart):
             for j, element in enumerate(row):
-                list_form[i][j] = self.full_chart[i][j].cell_sum()
+                list_form[i][j] = np.exp(self.full_chart[i][j].cell_sum())
 
         to_ret = str(list_form)
         return(to_ret)
@@ -108,17 +119,17 @@ class Matrix(object):
                     continue
                 if i > 0:
                     # insert bottom
-                    to_add = self.forward_chart[i-1][j].cell_sum()*\
-                                                        self.operation_pseudocounts[1] *\
-                                                            self.ins_bot_pseudocounts *\
+                    to_add = self.forward_chart[i-1][j].cell_sum()+\
+                                                        self.operation_pseudocounts[1] +\
+                                                            self.ins_bot_pseudocounts +\
                                                                 self.likelihoods[i-1]
 
                     self.forward_chart[i][j].ins_bot_prob = to_add
-                    self.forward_chart[i][j].contribs['i-1'] = np.sum(to_add)
+                    self.forward_chart[i][j].contribs['i-1'] = log_arr_sum(to_add)
                   
                 if j > 0:
                     # insert top
-                    to_add = self.forward_chart[i][j-1].cell_sum() *\
+                    to_add = self.forward_chart[i][j-1].cell_sum() +\
                                                          self.operation_pseudocounts[0]
                     self.forward_chart[i][j].ins_top_prob = to_add
                     self.forward_chart[i][j].contribs['j-1'] = to_add
@@ -126,12 +137,12 @@ class Matrix(object):
                   
                 if i > 0 and j > 0:
                     # substitution
-                    to_add = self.forward_chart[i-1][j-1].cell_sum() *\
-                                                    self.operation_pseudocounts[2] *\
-                                                        self.sub_pseudocounts[top_idx] * \
+                    to_add = self.forward_chart[i-1][j-1].cell_sum() +\
+                                                    self.operation_pseudocounts[2] +\
+                                                        self.sub_pseudocounts[top_idx] + \
                                                             self.likelihoods[i-1]
                     self.forward_chart[i][j].sub_prob = to_add
-                    self.forward_chart[i][j].contribs['i-1,j-1'] = np.sum(to_add)
+                    self.forward_chart[i][j].contribs['i-1,j-1'] = log_arr_sum(to_add)
                     self.full_chart[i][j].top_plu = self.top_string[j-1]
                     
     def backward(self):
@@ -143,23 +154,23 @@ class Matrix(object):
                     continue
                 if i < self.bottom_string_length:
                     # insert bottom
-                    to_add = self.backward_chart[i+1][j].cell_sum()*\
-                                                        self.operation_pseudocounts[1] *\
-                                                            self.ins_bot_pseudocounts *\
+                    to_add = self.backward_chart[i+1][j].cell_sum()+\
+                                                        self.operation_pseudocounts[1] +\
+                                                            self.ins_bot_pseudocounts +\
                                                                 self.likelihoods[i]
                     self.backward_chart[i][j].ins_bot_prob = to_add
 
                 if j < len(self.top_string):
                     # insert top
-                    to_add = self.backward_chart[i][j+1].cell_sum() *\
+                    to_add = self.backward_chart[i][j+1].cell_sum() +\
                                                          self.operation_pseudocounts[0]
                     self.backward_chart[i][j].ins_top_prob = to_add
                 
                 if i < self.bottom_string_length and j < len(self.top_string):
                     # substitution
-                    to_add = self.backward_chart[i+1][j+1].cell_sum() *\
-                                                    self.operation_pseudocounts[2] *\
-                                                        self.sub_pseudocounts[top_idx] * \
+                    to_add = self.backward_chart[i+1][j+1].cell_sum() +\
+                                                    self.operation_pseudocounts[2] +\
+                                                        self.sub_pseudocounts[top_idx] + \
                                                             self.likelihoods[i]
                     self.backward_chart[i][j].sub_prob = to_add
 
@@ -173,9 +184,9 @@ class Matrix(object):
         # helper function to multiply charts 
         for row_idx in range(len(forward)):
             for col_idx in range(len(forward[row_idx])):
-                self.full_chart[row_idx][col_idx].ins_bot_prob = self.forward_chart[row_idx][col_idx].ins_bot_prob * self.backward_chart[row_idx][col_idx].ins_bot_prob
-                self.full_chart[row_idx][col_idx].sub_prob = self.forward_chart[row_idx][col_idx].sub_prob * self.backward_chart[row_idx][col_idx].sub_prob
-                self.full_chart[row_idx][col_idx].ins_top_prob = self.forward_chart[row_idx][col_idx].ins_top_prob * self.backward_chart[row_idx][col_idx].ins_top_prob
+                self.full_chart[row_idx][col_idx].ins_bot_prob = self.forward_chart[row_idx][col_idx].ins_bot_prob + self.backward_chart[row_idx][col_idx].ins_bot_prob
+                self.full_chart[row_idx][col_idx].sub_prob = self.forward_chart[row_idx][col_idx].sub_prob + self.backward_chart[row_idx][col_idx].sub_prob
+                self.full_chart[row_idx][col_idx].ins_top_prob = self.forward_chart[row_idx][col_idx].ins_top_prob + self.backward_chart[row_idx][col_idx].ins_top_prob
 
         return self.full_chart
 
@@ -236,80 +247,61 @@ class InferenceEngine(object):
         self.sub_suff_stats = np.zeros((self.num_top, self.num_plus))
 
 
-    def learn(self):
+    def learn(self, epochs):
         prob_dict = {'ops': self.operation_pseudocounts, 'ib': self.ins_bot_pseudocounts, 'sub': self.sub_pseudocounts}
-        for t,b,l in zip(self.top_strings, self.bottom_strings, self.likelihoods):
+        for i in range(epochs):
+            for t,b,l in zip(self.top_strings, self.bottom_strings, self.likelihoods):
 
-            m = Matrix(t,self.bottom_alphabet,l,2, prob_dict)
-            print(t)
-            print(b)
-            self.acc_sufficient_stats(m)
+                m = Matrix(t,self.bottom_alphabet,l,2, prob_dict)
+                # print(t)
+                # print(b)
+                self.acc_sufficient_stats(m)
+                self.local_updates()
+            self.global_updates()
 
 
     def acc_sufficient_stats(self, m):
         chart = m.forward_backward()
-        print(m.decode())
-        pprint_chart(chart)
-
-        self.operation_suff_stats += m.operation_pseudocounts
+        # print(m.decode())
+        # if m.decode() == []:
+        #     pprint_chart(chart)
+        #     sys.exit()
+        self.operation_suff_stats = np.logaddexp(self.operation_suff_stats, m.operation_pseudocounts)
 
         for i in range(1, len(chart)):
             for j in range(1, len(chart[0])):
                 element = chart[i][j]
                 top_plu_idx = m.top_to_idx[element.top_plu]
 
-                self.ins_bot_suff_stats += element.ins_bot_prob
-                self.sub_suff_stats[top_plu_idx] += element.sub_prob
+                self.ins_bot_suff_stats = np.logaddexp(self.ins_bot_suff_stats, element.ins_bot_prob)
+                self.sub_suff_stats[top_plu_idx] = np.logaddexp(self.sub_suff_stats[top_plu_idx], element.sub_prob)
 
     def local_updates(self):
-        pass
+        # update the individual operation pseudocounts (local)
+        self.ins_bot_pseudocounts = np.logaddexp(self.ins_bot_pseudocounts, self.ins_bot_suff_stats)
+        self.sub_pseudocounts = np.logaddexp(self.sub_pseudocounts, self.sub_suff_stats)
+
     def global_updates(self):
-        pass
+        # update the operation probabilities (global)
+        self.operation_pseudocounts = np.logaddexp(self.operation_pseudocounts,\
+                self.operation_suff_stats)
 
-
-
-def pprint_chart(chart):
-    list_form = [[0 for i in range(len(chart[0]))] for j in range(len(chart))]
-    for i, row in enumerate(chart):
-        str_row = ""
-        for j, element in enumerate(row):
-
-            # list_form[i][j] = chart[i][j].cell_sum()
-            str_row += " {:5.4f} ".format(chart[i][j].cell_sum())
-        print(str_row)
-    # print(to_ret)
+    def report(self):
+        print("operation probs:")
+        print(self.operation_pseudocounts)
+        print("ins_bot probs")
+        print(self.ins_bot_pseudocounts)
+        print("sub_probs")
+        print(self.sub_pseudocounts)
 
 
 if __name__ == '__main__':
-    # top_string = ['a','b','c']
-    # bottom_string = ['a', 'b', 'b']
-    # bottom_string = ['x', 'y', 'z']
-    # likelihoods = np.array([[.8, .1, .1], [.33333, .333333, .33333], [.1, .1, .8]])
-    # likelihoods = np.array([[.9, .1],[.5,.5],[.9,.1]])
-
-    # likelihoods = np.array([[0, 1],[0,1],[0,1]])
-
-    # m = Matrix(top_string,bottom_string, likelihoods, 2)
-    # full_chart = m.forward_backward()
-    # print("forward")
-    # pprint_chart(m.forward_chart)
-    # print("backward")
-    # pprint_chart(m.backward_chart)
-    # print("combined")
-    # pprint_chart(m.full_chart)
-    # print("".join(top_string))
-    # print("".join(m.decode()))
 
     top_strings, bottom_strings, likelihoods = generate_data()
 
     inf_eng = InferenceEngine(top_strings, bottom_strings, likelihoods)
-    inf_eng.learn()
-    # bottom_alphabet = set([x for string in bottom_strings for x in string])
-
-    # for t,b,l in zip(top_strings, bottom_strings, likelihoods):
-    #     m = Matrix(t,bottom_alphabet,l,2)
-    #     # have it return pseudocounts 
-    #     full_chart = m.forward_backward()
+    inf_eng.learn(10)
+    inf_eng.report()
 
     print('done')
 
