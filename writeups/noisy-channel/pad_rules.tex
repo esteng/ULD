@@ -44,11 +44,13 @@ Each item has the following entries. In general, numerical indices are denoted b
 
 \noindent We also assume the existence of the following functions:
 \begin{itemize}
+	\item $TOP(m)$ returns the type of the PLU at position $M$ in the top-level PLU sequence.
 	\item $p_{hmm}(s_1 \rightarrow s_2)$ returns the probability of transitioning from phone position $s_1$ to $s_2$. This is always 0.5 under the current implementation.
 	\item $p_{op}(E)$ returns the probability of the given operation type ($\{IB, IT, SUB\}$).
 	\item $p_{ib}(A)$ returns the probability of the insert bottom operation for PLU $A$, given that $E=IB$.
+	\item $p_{it}(M)$ returns the probability of the insert top operation for PLU $M$, given that $E=IT$.
 	\item $p_{sub}(M,A)$ returns the probability of the substitute operation that substitutes PLU $A$ for PLU $M$, given that $E=SUB$.
-		\item $lh(A,s,i)$ returns the likelihood of state $s$ of PLU $A$ at frame $i$ (based on the audio input).
+	\item $lh(A,s,i)$ returns the likelihood of state $s$ of PLU $A$ at frame $i$ (based on the audio input).
 \end{itemize}
 
 
@@ -56,29 +58,27 @@ Each item has the following entries. In general, numerical indices are denoted b
 \subsection{Moves in Levenshtein matrix (PLU transitions)}
 \subsubsection{Insert Bottom}
 \myrule{
-    \toprulecomp{i}{end}{A}{a}{E}{M}{m}{P}
+    \toprulecomp{i}{end}{A}{a}{E}{TOP(m)}{m}{P}
     }
     {
-    \botrulecomp{i+1}{start}{B}{a+1}{IB}{M}{m}{P' = P \cdot p_{hmm}(end \rightarrow start) \cdot p_{op}(IB) \cdot p_{ib}(B) \cdot lh(B,start,i+1)}
+    \botrulecomp{i+1}{start}{B}{a+1}{IB}{TOP(m)}{m}{P' = P \cdot p_{hmm}(end \rightarrow start) \cdot p_{op}(IB) \cdot p_{ib}(B) \cdot lh(B,start,i+1)}
 }
 
 \subsubsection{Insert Top}
 \myrule{
-    \toprulecomp{i}{end}{A}{a}{E}{M}{m}{P}
+    \toprulecomp{i}{end}{A}{a}{E}{TOP(m)}{m}{P}
     }
     {
-    \botrulecomp{i}{end}{A}{a}{IT}{N}{m+1}{P' = P \cdot p_{op}(IT)}
+    \botrulecomp{i}{end}{A}{a}{IT}{TOP(m+1)}{m+1}{P' = P \cdot p_{op}(IT) \cdot p_{it}(N)}
     % NOTE TO ELIAS: I took out the likelihood factor here, because I don't think it makes sense, because a phone inserted on top has NO interaction with the audio data.
 } \\
 
-Note from Emily: I think we actually need insert top probabilities per-PLU -- that's the only way we can learn whether it's better to do an insert top or do a substitute.
-
 \subsubsection{Substitute}
 \myrule{
-    \toprulecomp{i}{end}{A}{a}{E}{M}{m}{P}
+    \toprulecomp{i}{end}{A}{a}{E}{TOP(m)}{m}{P}
     }
     {
-    \botrulecomp{i+1}{start}{B}{a+1}{E}{N}{m+1}{P' = P \cdot p_{hmm}(end \rightarrow start) \cdot p_{op}(SUB) \cdot p_{sub}(N,B) \cdot lh(B,start,i+1)}
+    \botrulecomp{i+1}{start}{B}{a+1}{E}{TOP(m+1)}{m+1}{P' = P \cdot p_{hmm}(end \rightarrow start) \cdot p_{op}(SUB) \cdot p_{sub}(N,B) \cdot lh(B,start,i+1)}
 }
 
 \subsection{PLU-internal transitions}
@@ -86,32 +86,32 @@ Note from Emily: I think we actually need insert top probabilities per-PLU -- th
 \subsubsection{HMM-state-internal transition}
 
 \myrule{
-	\toprulecomp{i}{s}{A}{a}{E}{M}{m}{P}
+	\toprulecomp{i}{s}{A}{a}{E}{TOP(m)}{m}{P}
 	}
 	{
-	\botrulecomp{i+1}{s}{A}{a}{E}{M}{m}{P'= P \cdot p_{hmm}(s \rightarrow s) \cdot lh(|A,s,i+1)}
+	\botrulecomp{i+1}{s}{A}{a}{E}{TOP(m)}{m}{P'= P \cdot p_{hmm}(s \rightarrow s) \cdot lh(|A,s,i+1)}
 	}
 	
 \subsubsection{PLU-internal HMM state transition}
 
 \myrule{
-	\toprulecomp{i}{s\in\{start,mid\}}{A}{a}{E}{M}{m}{P}
+	\toprulecomp{i}{s\in\{start,mid\}}{A}{a}{E}{TOP(m)}{m}{P}
 	}
 	{
-	\botrulecomp{i+1}{s+1}{A}{a}{E}{M}{m}{P'= P \cdot p_{hmm}(s \rightarrow s+1) \cdot lh(|A,s+1,i+1)}
+	\botrulecomp{i+1}{s+1}{A}{a}{E}{TOP(m)}{m}{P'= P \cdot p_{hmm}(s \rightarrow s+1) \cdot lh(|A,s+1,i+1)}
 	}
 	
-\subsection{Start item}
+\subsection{Start items}
 
 The start items look like this, for all $A\in {PLUs}$:	
 
-\toprulecomp{\mathbf{i=0}}{start}{A}{\mathbf{a=0}}{E}{M}{\mathbf{m=0}}{P=lh(A,start,0)}
+\toprulecomp{\mathbf{i=0}}{start}{A}{\mathbf{a=0}}{E}{TOP(0)}{\mathbf{m=0}}{P=lh(A,start,0)}
 	
 \subsection{Completion rules}
 
 The parse is complete when an item of the following format is reached, where $x$ is the number of frames in the audio input and $y$ is the number of PLUs in the top-level sequence.
 
-\toprulecomp{\mathbf{i=n}}{end}{A}{a}{E}{M}{\mathbf{m=y}}{P}
+\toprulecomp{\mathbf{i=n}}{end}{A}{a}{E}{TOP(y)}{\mathbf{m=y}}{P}
 
 
 \end{document}
