@@ -9,4 +9,10 @@ writeups/MTL-AI-abstract/abstract.pdf
 
 # Ignore search index files generated on Mac
 *.DS_Store
+
 writeups/MTL-AI-abstract/abstract.dvi
+
+# Ignore __pycache__ directories
+# (ugh I know there must be a cleaner way to do this but oh well)
+*/*/*/*/__pycache__/
+*/*/*/__pycache__/
