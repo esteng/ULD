@@ -35,7 +35,7 @@ Each item has the following entries. In general, numerical indices are denoted b
 \item PLU-internal HMM state ($s \in \{start, mid, end\}$)
 \item PLU bottom type ($A, B, ...$)
 \item PLU bottom index ($a, b, ...$ )
-\item edit operation type ($E \in \{IB, IT, SUB\}$)
+\item edit operation type ($E \in \{NONE, IB, IT, SUB\}$)
 \item PLU top index ($m, n, ...$)
 \item the probability of the item ($P$ or $P'$)
 \end{enumerate}
@@ -84,19 +84,19 @@ Each item has the following entries. In general, numerical indices are denoted b
 \subsubsection{HMM-state-internal transition}
 
 \myrule{
-	\toprulecomp{i}{s}{A}{a}{E\in\{IB,SUB\}}{m}{P}
+	\toprulecomp{i}{s}{A}{a}{E\in\{NONE,IB,SUB\}}{m}{P}
 	}
 	{
-	\botrulecomp{i+1}{s}{A}{a}{E}{m}{P'= P \cdot p_{hmm}(s \rightarrow s) \cdot lh(A,s,i+1)}
+	\botrulecomp{i+1}{s}{A}{a}{NONE}{m}{P'= P \cdot p_{hmm}(s \rightarrow s) \cdot lh(A,s,i+1)}
 	}
 	
 \subsubsection{PLU-internal HMM state transition}
 
 \myrule{
-	\toprulecomp{i}{s\in\{start,mid\}}{A}{a}{E\in\{IB,SUB\}}{m}{P}
+	\toprulecomp{i}{s\in\{start,mid\}}{A}{a}{E\in\{NONE,IB,SUB\}}{m}{P}
 	}
 	{
-	\botrulecomp{i+1}{s+1}{A}{a}{E}{m}{P'= P \cdot p_{hmm}(s \rightarrow s+1) \cdot lh(A,s+1,i+1)}
+	\botrulecomp{i+1}{s+1}{A}{a}{NONE}{m}{P'= P \cdot p_{hmm}(s \rightarrow s+1) \cdot lh(A,s+1,i+1)}
 	}
 	
 \subsection{Start items}
@@ -119,13 +119,13 @@ Iterating through the items in a correct order, such that all items from which i
 
 As a starting point for thinking about ordering, below is a list of all items from which item $x=$\toprulecomp{i}{s}{A}{a}{E}{m}{P} is reachable, and thus must be completed before $x$ is entered, given certain conditions on the parameters. \\
 
-\noindent\begin{tabular}{ l p{4.1cm} l }
+\noindent\begin{tabular}{ p{5.6cm} p{6cm} l }
   Item & Conditions & Transition type \\\hline
   \toprulecomp{i-1}{end}{B}{a-1}{E'}{m}{P'} & if $E=IB,s=start$ & Insert-bottom operation \\
   \toprulecomp{i}{end}{A}{a}{E'}{m-1}{P'} & if $E=IT,s=end$ & Insert-top operation \\
-  \toprulecomp{i-1}{end}{B}{a-1}{E'}{m-1}{P'} & if $E=SUB$,\hfill$s=start$ & Substitute operation \\
-  \toprulecomp{i-1}{s}{A}{a}{E}{m}{P'} & if $E\in\{IB,SUB\}$ & PLU-internal HMM self-transition \\
-  \toprulecomp{i-1}{s-1}{A}{a}{E}{m}{P'} & if $E\in\{IB,SUB\},s\in\{mid,end\}$ & PLU-internal HMM transition \\
+  \toprulecomp{i-1}{end}{B}{a-1}{E'}{m-1}{P'} & if $E=SUB$,$s=start$ & Substitute operation \\
+  \toprulecomp{i-1}{s}{A}{a}{NONE}{m}{P'} & if $E\in\{NONE,IB,SUB\}$ & PLU-internal HMM self-transition \\
+  \toprulecomp{i-1}{s-1}{A}{a}{NONE}{m}{P'} & if $E\in\{NONE,IB,SUB\}$,$s\in\{mid,end\}$ & PLU-internal HMM transition \\
 \end{tabular}
 
 
