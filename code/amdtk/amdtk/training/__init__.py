@@ -5,5 +5,5 @@ features to automatically discover phone-like units.
 
 """
 
-from .inference import StochasticVBOptimizer
+from .inference import StochasticVBOptimizer, NoisyChannelOptimizer
 

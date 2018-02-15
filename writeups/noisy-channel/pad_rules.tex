@@ -101,15 +101,25 @@ Each item has the following entries. In general, numerical indices are denoted b
 	
 \subsection{Start items}
 
-The start items look like this, for all $A\in {PLUs}$:	
+The start items are as follows:	
 
-\toprulecomp{\mathbf{i=0}}{start}{A}{\mathbf{a=0}}{E}{\mathbf{m=0}}{P=lh(A,start,0)}
+\begin{itemize}
+\item \{\toprulecomp{\mathbf{i=0}}{start}{A}{\mathbf{a=0}}{IB}{\mathbf{m=-1}}{P= p_{op}(IB) \cdot p_{ib}(A) \cdot lh(A,start,0)}\},
+$\forall A\in \{\text{bottom-level PLUs}\}$
+
+\item \{\toprulecomp{\mathbf{i=-1}}{end}{A}{\mathbf{a=-1}}{IT}{\mathbf{m=0}}{P= p_{op}(IT) \cdot p_{it}(TOP(0))}\}
+
+\item \{\toprulecomp{\mathbf{i=0}}{start}{A}{\mathbf{a=0}}{SUB}{\mathbf{m=0}}{P= p_{op}(SUB) \cdot p_{sub}(TOP(0),A) \cdot lh(A,start,0)}\}, \newline
+$\forall A\in \{\text{bottom-level PLUs}\}$
+\end{itemize}
 	
 \subsection{Completion rules}
 
-The parse is complete when an item of the following format is reached, where $x$ is the number of frames in the audio input and $y$ is the number of PLUs in the top-level sequence.
+The parse is complete when any item of the following is reached, where $x$ is the number of frames in the audio input and $y$ is the number of PLUs in the top-level sequence.
 
-\toprulecomp{\mathbf{i=n}}{end}{A}{a}{E}{\mathbf{m=y}}{P}
+\begin{itemize}
+\item \{\toprulecomp{\mathbf{i=n}}{end}{A}{a}{E}{\mathbf{m=y}}{P}\}, $\forall A\in \{\text{bottom-level PLUs}\}, 1\leq a\leq max\_bottom$
+\end{itemize}
 
 \section{Implementation details}
 

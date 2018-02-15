@@ -37,6 +37,15 @@ from .hmm_utils import viterbi
 from .model import EFDStats, DiscreteLatentModel
 from ..densities import Dirichlet, NormalGamma, NormalDiag
 
+from enum import Enum
+
+
+class Ops(Enum):
+	IB = 0
+	IT = 1
+	SUB = 2
+	NONE = 3
+
 
 class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	"""Bayesian Phone Loop model with noisy channel addition.
@@ -119,7 +128,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			)
 			components.append(NormalDiag(priors[i], posterior))
 
-		return PhoneLoop(op_type_latent_prior, op_type_latent_posterior,
+		return PhoneLoopNoisyChannel(op_type_latent_prior, op_type_latent_posterior,
 						 it_latent_prior, it_latent_posterior,
 						 ib_latent_prior, ib_latent_posterior,
 						 sub_latent_prior, sub_latent_posterior,
@@ -141,15 +150,21 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.n_units = len(ib_latent_prior.natural_params)
 		self.n_states = len(state_priors) // self.n_units
 		self.n_comp_per_states = len(state_priors[0].natural_params)
+		self.n_top_units = len(it_latent_prior.natural_params)
+
+		self.max_slip_factor = 0.05
+
+		self.op_type_latent_prior = op_type_latent_prior
+		self.op_type_latent_posterior = op_type_latent_posterior
+		self.ib_latent_prior = ib_latent_prior
+		self.ib_latent_posterior = ib_latent_posterior
+		self.it_latent_prior = it_latent_prior
+		self.it_latent_posterior = it_latent_posterior
+		self.sub_latent_prior = sub_latent_prior
+		self.sub_latent_posterior = sub_latent_posterior
 
 		self.state_priors = state_priors
 		self.state_posteriors = state_posteriors
-
-		# Will be initialized later.
-		self.init_prob = None
-		self.trans_mat = None
-		self.init_states = None
-		self.final_states = None
 
 		self.post_update()
 
@@ -163,15 +178,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		for idx in range(self.n_units * self.n_states):
 				self.state_log_weights[idx, :] = \
 					self.state_posteriors[idx].grad_log_partition
-
-		# vvv  We don't need to do any of this  vvv
-		# Update the log transition matrix.
-		# unigram_lm = np.exp(self.latent_posterior.grad_log_partition)
-		# unigram_lm /= unigram_lm.sum()
-		# self.init_prob = unigram_lm
-		# self.trans_mat, self.init_states, self.final_states = \
-		#     create_phone_loop_transition_matrix(self.n_units, self.n_states,
-		#                                         unigram_lm)
 
 	def _get_state_llh(self, s_stats):
 		# Evaluate the Gaussian log-likelihoods.
@@ -208,37 +214,88 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return np.exp(log_units_stats)
 
 
-	def decode(self, data, state_path=False, phone_intervals=False):
+	def decode(self, data, plu_tops, state_path=False, phone_intervals=False):
 		s_stats = self.get_sufficient_stats(data)
 
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
-		path = viterbi(
-			self.init_prob,
-			self.trans_mat,
-			self.init_states,
-			self.final_states,
-			state_llh
-		)
+		n_frames = state_llh.shape[0]
+		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
+		max_plu_bottom_index = len(plu_tops) + max_slip
 
-		if state_path:
-			return path
+		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
+		log_prob_ib = self.ib_latent_posterior.grad_log_partition
+		log_prob_it = self.it_latent_posterior.grad_log_partition
+		log_prob_sub = self.sub_latent_posterior.grad_log_partition
+		n_frames = state_llh.shape[0]
 
+		# Calculate forward probabilities WITH BACKPOINTERS
+		forward_probs = {}
+		# Insert starting items
+		for (item, prob) in self.generate_start_items(plu_tops, state_llh):
+			forward_probs[item] = (prob, None)
 
-		path = [bisect(self.init_states, state) for state in path]
+		for plu_bottom_index in range(-1,max_plu_bottom_index):
+			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
+			print("len(forward_probs) = "+str(len(forward_probs)))
+			for plu_top_index in range(-1,len(plu_tops)):
+				for plu_bottom_type in range(self.n_units):
+					for edit_op in Ops:
+						for hmm_state in range(self.n_states):
+							for frame_index in range(n_frames):
+								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
+								if curr_state in forward_probs:
+									nexts = self.next_states((curr_state, forward_probs[curr_state][0]), plu_tops, state_llh, max_slip)
+									
+									for next_state_and_prob in nexts:
+										(next_state, prob) = next_state_and_prob
+										if next_state in forward_probs:
+											(curr_prob, (back_pointer, back_prob)) = forward_probs[next_state]
+											new_prob = np.logaddexp(forward_probs[next_state][0], prob)
+											if prob > back_prob:
+												forward_probs[next_state] = (new_prob, (curr_state, prob))
+											else:
+												forward_probs[next_state] = (new_prob, (back_pointer, back_prob))
+										else:
+											forward_probs[next_state] = (prob, (curr_state, prob))
+
+		# Backtrace
+		# Figure out which item to start from
+		end_items = self.generate_end_items(plu_tops, state_llh, max_plu_bottom_index)
+		best_item = None
+		best_prob = float("-inf")
+		for (item, _) in end_items:
+			value = forward_probs.get(item, (float("-inf"), None))
+			if value[0] > best_prob:
+				best_prob = forward_probs[item][0]
+				best_item = item
+
+		(prob, back_pointer_tuple) = forward_probs[best_item]
+
+		back_path = [best_item]
+
+		# Do backtrace
+		while back_pointer_tuple is not None:
+			back_path.append(back_pointer_tuple[0])
+			(prob, back_pointer_tuple) = forward_probs[back_path[-1]]
+
+		# Get PLU list
+		back_path.reverse()
+
+		path = [state[2] for state in back_path]
+
 		if phone_intervals:
 			groups = groupby(path)
-			path = []
+			interval_path = []
 			begin_index = 0
 			for group in groups:
 				end_index = begin_index + sum(1 for item in group[1])
-				path.append((group[0], begin_index, end_index))
+				interval_path.append((group[0], begin_index, end_index))
 				begin_index = end_index
+			return interval_path
 
 		else:
-			path = [x[0] for x in groupby(path)]
-
-		return path
+			return path
 
 
 	# DiscreteLatentModel interface.
@@ -253,56 +310,97 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			Kullback-Leibler divergence.
 
 		"""
-		retval = DiscreteLatentModel.kl_div_posterior_prior(self)
+		#retval = DiscreteLatentModel.kl_div_posterior_prior(self)
+
+		retval = 0.
+		retval += self.op_type_latent_posterior.kl_div(self.op_type_latent_prior)
+		retval += self.ib_latent_posterior.kl_div(self.ib_latent_prior)
+		retval += self.it_latent_posterior.kl_div(self.it_latent_prior)
+		retval += self.sub_latent_posterior.kl_div(self.sub_latent_prior)
+
+		for comp in self.components:
+			retval += comp.posterior.kl_div(comp.prior)
+
 		for idx, post in enumerate(self.state_posteriors):
 			retval += post.kl_div(self.state_priors[idx])
+
 		return retval
 
 	def get_posteriors(self, s_stats, top_seq, accumulate=False):
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
-		# Okay, this is where the workhorse of this algorithm we've worked out goes
+		# The workhorse
+		log_ib_counts, log_it_counts, log_sub_counts, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh)
 
-		log_ib_counts, log_it_counts, log_sub_counts = forward_backward_noisy_channel(top_seq, state_llh)
+		# Compute the posteriors
 
-		# Compute the posteriors.
-		log_q_Z = (log_alphas + log_betas).T
-		log_norm = logsumexp(log_q_Z, axis=0)
-		state_resps = np.exp((log_q_Z - log_norm))
+		log_edit_op_counts = np.array([logsumexp(log_ib_counts), logsumexp(log_it_counts), logsumexp(log_sub_counts)])
+		edit_op_counts_normalized = np.exp(log_edit_op_counts - logsumexp(log_edit_op_counts))
+
+		ib_counts_normalized = np.exp(log_ib_counts - logsumexp(log_ib_counts))
+		it_counts_normalized = np.exp(log_it_counts - logsumexp(log_it_counts))
+		sub_counts_normalized = np.exp(log_sub_counts - logsumexp(log_sub_counts))
+
+		# Normalize by frame
+		state_norm = logsumexp(log_state_counts, axis=0)
+		state_counts_perframe_normalized = np.exp(log_state_counts - state_norm)
+		# ^ this is equivalent to state_resps in the normal phone loop
 
 		if accumulate:
-			tot_resps = state_resps[:, np.newaxis, :] * c_given_s_resps
+			tot_resps = state_counts_perframe_normalized[:, np.newaxis, :] * c_given_s_resps
 			gauss_resps = tot_resps.reshape(-1, tot_resps.shape[-1])
-			if self.n_states > 1 :
-				units_stats = self.units_stats(state_llh, log_alphas,
-											   log_betas)
-			else:
-				units_stats = resps.sum(axis=0)
+			
+			# We don't need units_stats because we have the ib, it, sub counts
 
 			state_stats = tot_resps.sum(axis=2)
 			gauss_stats = gauss_resps.dot(s_stats)
-			acc_stats = EFDStats([units_stats, state_stats, gauss_stats])
+			acc_stats = EFDStats([edit_op_counts_normalized, ib_counts_normalized, it_counts_normalized, sub_counts_normalized, 
+				state_stats, gauss_stats])
 
-			return state_resps, log_norm[-1], acc_stats
+			return state_counts_perframe_normalized, state_norm[-1], acc_stats
 
-		return state_resps, log_norm[-1]
+		return state_counts_perframe_normalized, state_norm[-1]
 
 	def natural_grad_update(self, acc_stats, lrate):
 		"""Natural gradient update."""
-		# Update unigram language model.
-		grad = self.latent_prior.natural_params + acc_stats[0]
-		grad -= self.latent_posterior.natural_params
-		self.latent_posterior.natural_params = \
-			self.latent_posterior.natural_params + lrate * grad
+		edit_op_counts = acc_stats[0]
+		ib_counts = acc_stats[1]
+		it_counts = acc_stats[2]
+		sub_counts = acc_stats[3]
+		state_stats = acc_stats[4]
+		gauss_stats = acc_stats[5]
+
+
+		# Update edit op type counts
+		op_grad = self.op_type_latent_prior.natural_params + edit_op_counts - self.op_type_latent_posterior.natural_params
+		self.op_type_latent_posterior.natural_params += lrate * op_grad
+
+		# Update edit op counts
+		ib_grad = self.ib_latent_prior.natural_params + ib_counts - self.ib_latent_posterior.natural_params
+		self.ib_latent_posterior.natural_params += lrate * ib_grad
+		it_grad = self.it_latent_prior.natural_params + it_counts - self.it_latent_posterior.natural_params
+		self.it_latent_posterior.natural_params += lrate * it_grad
+		sub_grad = self.sub_latent_prior.natural_params + sub_counts - self.sub_latent_posterior.natural_params
+		self.sub_latent_posterior.natural_params += lrate * sub_grad
+
+		print("self.op_type_latent_posterior.natural_params")
+		print(self.op_type_latent_posterior.natural_params)
+		print("self.ib_latent_posterior.natural_params")
+		print(self.ib_latent_posterior.natural_params)
+		print("self.it_latent_posterior.natural_params")
+		print(self.it_latent_posterior.natural_params)
+		print("self.sub_latent_posterior.natural_params")
+		print(self.sub_latent_posterior.natural_params)
+
 
 		# Update the states' weights.
 		for idx, post in enumerate(self.state_posteriors):
-			grad = self.state_priors[idx].natural_params + acc_stats[1][idx]
+			grad = self.state_priors[idx].natural_params + state_stats[idx]
 			grad -= post.natural_params
 			post.natural_params = post.natural_params + lrate * grad
 
 		# Update Gaussian components.
-		for idx, stats in enumerate(acc_stats[2]):
+		for idx, stats in enumerate(gauss_stats):
 			comp = self.components[idx]
 			grad = comp.prior.natural_params + stats
 			grad -= comp.posterior.natural_params
@@ -312,148 +410,225 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.post_update()
 
 
-		def forward_backward_noisy_channel(plu_tops, state_llh):
+	def forward_backward_noisy_channel(self, plu_tops, state_llh):
 
-			n_frames = state_llh.shape[0]
-			max_plu_bottom_index = len(plu_tops)*2
+		n_frames = state_llh.shape[0]
+		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
+		max_plu_bottom_index = len(plu_tops) + max_slip
 
-			# Calculate forward probabilities
-			forward_probs = {}
-			for plu_bottom_index in range(max_plu_bottom_index):
-				for plu_top_index in range(len(plu_tops)):
-					for plu_bottom_type in range(self.model.n_units):
-						for edit_op in Ops:
-							for hmm_state in range(self.model.n_states):
-								for frame_index in range(n_frames):
-									curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-									if curr_state in forward_probs:
-										nexts = next_states((curr_state, forward_probs[state]), plu_tops, state_llh)
-										for next_state_and_prob in nexts:
-											(next_state, prob) = next_state_and_prob
-											forward_probs[next_state] = logsumexp(np.array([forward_probs.get(next_state, 0), prob]))
+		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
+		log_prob_ib = self.ib_latent_posterior.grad_log_partition
+		log_prob_it = self.it_latent_posterior.grad_log_partition
+		log_prob_sub = self.sub_latent_posterior.grad_log_partition
+		n_frames = state_llh.shape[0]
 
-			# Calculate backward probabilities
-			backward_probs = {}
-			for plu_bottom_index in range(max_plu_bottom_index-1, 0, -1):
-				for plu_top_index in range(len(plu_tops)-1, -1, -1):
-					for plu_bottom_type in range(self.model.n_units):
-						for edit_op in Ops:
-							for hmm_state in range(self.model.n_states-1,-1,-1):
-								for frame_index in range(n_frames-1,-1,-1):
-									curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-									if curr_state in backward_probs:
-										prevs = prev_states((curr_state, forward_probs[state]), plu_tops, state_llh)
-										for prev_state_and_prob in prevs:
-											(prev_state, prob) = next_state_and_prob
-											backward_probs[prev_state] = logsumexp(np.array([backward_probs.get(prev_state, 0), prob]))
+		# Calculate forward probabilities
+		forward_probs = {}
+		# Insert starting items
+		for (item, prob) in self.generate_start_items(plu_tops, state_llh):
+			forward_probs[item] = prob
 
-			# Sum over forwards & backwards probabilities to get the expected counts
-			log_ib_counts = np.zeros(n_units)
-			log_it_counts = np.zeros(n_units)
-			log_sub_counts = np.zeros((n_units, n_units))
-			for plu_bottom_index in range(max_plu_bottom_index):
-				for plu_top_index in range(len(plu_tops)):
-					for plu_bottom_type in range(self.model.n_units):
-						for edit_op in Ops:
-							for hmm_state in range(self.model.n_states):
-								for frame_index in range(n_frames):
-									curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-									if curr_state in forward_probs and curr_state in backward_probs:
-										fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
-										if edit_op == Ops.IB:
-											log_ib_counts[plu_bottom_type] = logsumexp(np.array([log_ib_counts[plu_bottom_type],fw_bw_prob]))
-										elif edit_op == Ops.IT:
-											log_it_counts[plu_tops[plu_top_index]] = logsumexp(np.array([log_it_counts[plu_tops[plu_top_index]],fw_bw_prob]))
-										elif edit_op == Ops.SUB:
-											log_sub_counts[plu_bottom_type,plu_tops[plu_top_index]] = logsumexp(np.array(log_sub_counts[plu_bottom_type,plu_tops[plu_top_index]],fw_bw_prob))
+		for plu_bottom_index in range(-1,max_plu_bottom_index):
+			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
+			print("len(forward_probs) = "+str(len(forward_probs)))
+			for plu_top_index in range(-1,len(plu_tops)):
+				for plu_bottom_type in range(self.n_units):
+					for edit_op in Ops:
+						for hmm_state in range(self.n_states):
+							for frame_index in range(n_frames):
+								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
+								if curr_state in forward_probs:
+									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip)
+									for next_state_and_prob in nexts:
+										(next_state, prob) = next_state_and_prob
+										forward_probs[next_state] = np.logaddexp(forward_probs.get(next_state, 1), prob)
 
-			return log_ib_counts, log_it_counts, log_sub_counts
+		# Calculate backward probabilities
+		backward_probs = {}
+		# Insert ending items
+		for (item, prob) in self.generate_end_items(plu_tops, state_llh, max_plu_bottom_index):
+			backward_probs[item] = prob
+		for plu_bottom_index in range(max_plu_bottom_index-1, 0, -1):
+			print("backward ** plu_bottom_index = "+str(plu_bottom_index))
+			print("len(backward_probs) = "+str(len(backward_probs)))
+			for plu_top_index in range(len(plu_tops)-1, -1, -1):
+				for plu_bottom_type in range(self.n_units):
+					for edit_op in Ops:
+						for hmm_state in range(self.n_states-1,-1,-1):
+							for frame_index in range(n_frames-1,-1,-1):
+								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
+								if curr_state in backward_probs:
+									prevs = self.prev_states((curr_state, backward_probs[curr_state]), plu_tops, n_frames, state_llh, max_slip)
+									for prev_state_and_prob in prevs:
+										(prev_state, prob) = prev_state_and_prob
+										backward_probs[prev_state] = np.logaddexp(backward_probs.get(prev_state, 1), prob)
+
+		# Sum over forwards & backwards probabilities to get the expected counts
+		# We need expected counts of HMM states for each frame, and also expected counts of edit operations
+		log_state_counts = np.ones((self.n_units*self.n_states, n_frames))
+		log_ib_counts = np.ones(self.n_units)
+		log_it_counts = np.ones(self.n_top_units)
+		log_sub_counts = np.ones(self.n_units*self.n_top_units)
+		for plu_bottom_index in range(-1,max_plu_bottom_index):
+			print("together ** plu_bottom_index = "+str(plu_bottom_index))
+			for plu_top_index in range(len(plu_tops)):
+				for plu_bottom_type in range(self.n_units):
+					for edit_op in Ops:
+						for hmm_state in range(self.n_states):
+							for frame_index in range(n_frames):
+								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
+
+								if curr_state in forward_probs and curr_state in backward_probs:
+									fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
+
+									# Update edit operation expected counts
+									if edit_op.value == Ops.IB.value:
+										log_ib_counts[plu_bottom_type] = np.logaddexp(log_ib_counts[plu_bottom_type],fw_bw_prob)
+									elif edit_op.value == Ops.IT.value:
+										log_it_counts[plu_tops[plu_top_index]] = np.logaddexp(log_it_counts[plu_tops[plu_top_index]],fw_bw_prob)
+									elif edit_op.value == Ops.SUB.value:
+										log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]] = np.logaddexp(log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]],fw_bw_prob)
+
+									# Update per-frame HMM expected counts
+									log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], fw_bw_prob)
+
+		print("len(forward_probs)")
+		print(len(forward_probs))
+
+		print("len(backward_probs)")
+		print(len(backward_probs))
+
+		print("log_ib_counts")
+		print(log_ib_counts)
+
+		print("log_it_counts")
+		print(log_it_counts)
+
+		print("log_sub_counts")
+		print(log_sub_counts)
+
+		print("log_state_counts")
+		print(log_state_counts)
+
+		return log_ib_counts, log_it_counts, log_sub_counts, log_state_counts
+
+	def generate_start_items(self, plu_tops, state_llh):
+
+		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
+		log_prob_ib = self.ib_latent_posterior.grad_log_partition
+		log_prob_it = self.it_latent_posterior.grad_log_partition
+		log_prob_sub = self.sub_latent_posterior.grad_log_partition
 
 
-		# Takes as input a tuple representing the current state
-		# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
-		# and returns a list containing tuples of the form (next_state, log_prob)
-		def next_states(current_state, plu_tops, state_llh):
-			((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
+		# Insert-bottom start items
+		ib_start_items = [((0, 0, pb, 0, Ops.IB.value, -1), (state_llh[0,(pb*self.n_states)] + log_prob_ops[Ops.IB.value] + log_prob_ib[pb])) for pb in range(self.n_units)]
+		
+		# Insert-top start item
+		it_start_item = ((-1,self.n_states-1,-1,Ops.IT.value,0), (log_prob_ops[Ops.IT.value] + log_prob_it[plu_tops[0]]))
 
-			log_prob_ops = self.op_type_latent_posterior.grad_log_partition
-			log_prob_ib = self.ib_latent_posterior.grad_log_partition
-			log_prob_it = self.it_latent_posterior.grad_log_partition
-			log_prob_sub = self.sub_latent_posterior.grad_log_partition
-			n_frames = state_llh.shape[0]
+		# Substitute start items
+		sub_start_items = [((0, 0, pb, 0, Ops.IB.value, 0),(state_llh[0,(pb*self.n_states)] + log_prob_ops[Ops.SUB.value] + log_prob_sub[pb*self.n_top_units+plu_tops[0]])) for pb in range(self.n_units)]
 
-			next_states = []
+		items = ib_start_items
+		items.append(it_start_item)
+		items.extend(sub_start_items)
+		return items
 
-			# Insert bottom op (for all possible bottom PLUs)
-			if (hmm_state == self.n_states-1) and (frame_index < n_frames-1):
-				next_states.extend([((frame_index+1, 0, pb, plu_bottom_index+1, Ops.IB, plu_top_index), \
-					(p + state_llh[frame_index+1,(pb*n_states)] + log_prob_ops[Ops.IB] + log_prob_ib[pb] + log(0.5))) for pb in n_units])
+	def generate_end_items(self, plu_tops, state_llh, max_plu_bottom_index):
 
-			# Insert top op
-			if (hmm_state == self.n_states-1) and (plu_top_index < len(plu_tops)-1):
-				next_states.append(((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, Ops.IT, plu_top_index+1), \
-					(p + log_prob_ops[Ops.IT] + log_prob_it[plu_tops[plu_top_index+1]])))
+		n_frames = state_llh.shape[0]
 
-			# Substitute op (for all possible bottom PLUs)
-			if (hmm_state == self.n_states-1) and (frame_index < n_frames-1) and (plu_top_index < len(plu_tops-1)):
-				next_states.extend([((frame_index+1, 0, pb, plu_bottom_index+1, Ops.SUB, plu_top_index+1), \
-					(p + state_llh[frame_index+1,(pb*n_states)] + log_prob_ops[Ops.SUB] + log_prob_sub[plu_tops[plu_top_index+1],pb] + log(0.5))) for pb in n_units])
+		items = [(n_frames-1, self.n_states-1, pb, pb_index, op.value, len(plu_tops)-1) for pb in range(self.n_units) for pb_index in range(1,max_plu_bottom_index) for op in Ops]
+		
+		prob = math.log(1./len(items))
 
-			# HMM-state-internal transition
-			if (edit_op != Ops.IT) and (frame_index < n_frames-1):
-				next_states.append(((frame_index+1, hmm_state, plu_bottom_type, plu_bottom_index, Ops.NONE, plu_top_index), \
-					(p + state_llh[frame_index+1,(pb*n_states+hmm_state)] + log(0.5))))
+		return [(item, prob) for item in items]
 
-			# PLU-internal HMM state transition
-			if (edit_op != Ops.IT) and (hmm_state < self.n_states-1) and (frame_index < n_frames-1):
-				next_states.append(((frame_index+1, hmm_state+1, plu_bottom_type, plu_bottom_index, Ops.NONE, plu_top_index), \
-					(p + state_llh[frame_index+1,(pb*n_states+hmm_state)] + log(0.5))))
 
-			return next_states
+	# Takes as input a tuple representing the current state
+	# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
+	# and returns a list containing tuples of the form (next_state, log_prob)
+	def next_states(self, current_state, plu_tops, state_llh, max_slip):
+		((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
 
-		# Takes as input a tuple representing the current state
-		# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
-		# and returns a list containing tuples of the form (next_state, log_prob)
-		def prev_states(current_state, plu_tops, n_frames, state_llh):
-			((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
+		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
+		log_prob_ib = self.ib_latent_posterior.grad_log_partition
+		log_prob_it = self.it_latent_posterior.grad_log_partition
+		log_prob_sub = self.sub_latent_posterior.grad_log_partition
+		n_frames = state_llh.shape[0]
 
-			log_prob_ops = self.op_type_latent_posterior.grad_log_partition
-			log_prob_ib = self.ib_latent_posterior.grad_log_partition
-			log_prob_it = self.it_latent_posterior.grad_log_partition
-			log_prob_sub = self.sub_latent_posterior.grad_log_partition
+		next_states = []
 
-			prev_states = []
+		# Insert bottom op (for all possible bottom PLUs)
+		if (hmm_state == self.n_states-1) and (frame_index < n_frames-1) and (plu_bottom_index-plu_top_index < max_slip):
+			next_states.extend([((frame_index+1, 0, pb, plu_bottom_index+1, Ops.IB.value, plu_top_index), \
+				(p + state_llh[frame_index+1,(pb*self.n_states)] + log_prob_ops[Ops.IB.value] + log_prob_ib[pb] + math.log(0.5))) for pb in range(self.n_units)])
 
-			# NOTE: THE PROBABILITY UPDATES ARE *NOT* RIGHT IN THIS FUNCTION --
-			# I AM NOT SURE HOW TO UPDATE THE PROBABILITIES CORRECTLY FOR BACKWARDS ALGORITHM
+		# Insert top op
+		if (hmm_state == self.n_states-1) and (plu_top_index < len(plu_tops)-1) and (plu_top_index-plu_bottom_index < max_slip):
+			next_states.append(((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, Ops.IT.value, plu_top_index+1), \
+				(p + log_prob_ops[Ops.IT.value] + log_prob_it[plu_tops[plu_top_index+1]])))
 
-			# Reverse of insert bottom op (for all possible previous bottom PLUs and edit ops)
-			if (hmm_state == 0) and (edit_op == Ops.IB) and (plu_bottom_index > 0) and (frame_index > 0):
-				prev_states.extend([[((frame_index-1, self.n_states-1, pb, plu_bottom_index-1, op, plu_top_index), \
-					(p + state_llh[frame_index+1,(pb*n_states)] + log_prob_ops[Ops.IB] + log_prob_ib[pb] + log(0.5)) ) for pb in n_units] for op in Ops])
+		# Substitute op (for all possible bottom PLUs)
+		if (hmm_state == self.n_states-1) and (frame_index < n_frames-1) and (plu_top_index < len(plu_tops)-1):
+			next_states.extend([((frame_index+1, 0, pb, plu_bottom_index+1, Ops.SUB.value, plu_top_index+1), \
+				(p + state_llh[frame_index+1,(pb*self.n_states)] + log_prob_ops[Ops.SUB.value] + log_prob_sub[pb*self.n_top_units+plu_tops[plu_top_index+1]] + math.log(0.5))) for pb in range(self.n_units)])
 
-			# Reverse of insert top op (for all possible previous edit ops)
-			if (hmm_state == self.n_states-1) and (edit_op == Ops.IT) and (plu_top_index > 0):
-				next_states.extend([((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, Ops.IT, plu_top_index-1), \
-					(p + log_prob_ops[Ops.IT] + log_prob_it[plu_tops[plu_top_index+1]])) for op in Ops])
+		# HMM-state-internal transition
+		if (edit_op != Ops.IT.value) and (frame_index < n_frames-1):
+			next_states.append(((frame_index+1, hmm_state, plu_bottom_type, plu_bottom_index, Ops.NONE.value, plu_top_index), \
+				(p + state_llh[frame_index+1,(plu_bottom_type*self.n_states+hmm_state)] + math.log(0.5))))
 
-			# Reverse of substitute op (for all possible previous bottom PLUs and edit ops)
-			if (hmm_state == 0) and (edit_op == Ops.SUB) and (plu_bottom_index > 0) and \
-					(plu_top_index > 0) and (frame_index > 0):
-				next_states.extend([[((frame_index-1, self.n_states-1, pb, plu_bottom_index-1, ops, plu_top_index-1), \
-					(p + state_llh[frame_index+1,(pb*n_states)] + log_prob_ops[Ops.SUB] + log_prob_sub[plu_tops[plu_top_index+1],pb] + log(0.5))) for pb in n_units] for op in Ops])
+		# PLU-internal HMM state transition
+		if (edit_op != Ops.IT.value) and (hmm_state < self.n_states-1) and (frame_index < n_frames-1):
+			next_states.append(((frame_index+1, hmm_state+1, plu_bottom_type, plu_bottom_index, Ops.NONE.value, plu_top_index), \
+				(p + state_llh[frame_index+1,(plu_bottom_type*self.n_states+hmm_state)] + math.log(0.5))))
 
-			# Reverse of HMM-state-internal transition
-			if (edit_op != Ops.IT) and (frame_index > 0):
-				next_states.append(((frame_index-1, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), \
-					(p + state_llh[frame_index+1,(pb*n_states+hmm_state)] + log(0.5))))
+		return next_states
 
-			# Reverse of PLU-internal HMM state transition
-			if (edit_op != Ops.IT) and (hmm_state > 0) and (frame_index > 0):
-				next_states.append(((frame_index-1, hmm_state-1, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), \
-					(p + state_llh[frame_index+1,(pb*n_states+hmm_state)] + log(0.5))))
+	# Takes as input a tuple representing the current state
+	# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
+	# and returns a list containing tuples of the form (next_state, log_prob)
+	def prev_states(self, current_state, plu_tops, n_frames, state_llh, max_slip):
+		((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
 
-			return prev_states
+		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
+		log_prob_ib = self.ib_latent_posterior.grad_log_partition
+		log_prob_it = self.it_latent_posterior.grad_log_partition
+		log_prob_sub = self.sub_latent_posterior.grad_log_partition
+
+		prev_states = []
+
+		# NOTE: THE PROBABILITY UPDATES ARE *NOT* RIGHT IN THIS FUNCTION --
+		# I AM NOT SURE HOW TO UPDATE THE PROBABILITIES CORRECTLY FOR BACKWARDS ALGORITHM
+
+		# Reverse of insert bottom op (for all possible previous bottom PLUs and edit ops)
+		if (hmm_state == 0) and (edit_op == Ops.IB.value) and (plu_bottom_index > 0) and (frame_index > 0) and (plu_top_index-plu_bottom_index < max_slip):
+			prev_states.extend([((frame_index-1, self.n_states-1, pb, plu_bottom_index-1, op.value, plu_top_index), \
+				(p + state_llh[frame_index-1,(pb*self.n_states)] + log_prob_ops[Ops.IB.value] + log_prob_ib[pb] + math.log(0.5)) ) for pb in range(self.n_units) for op in [Ops.IT, Ops.NONE]])
+
+		# Reverse of insert top op (for all possible previous edit ops)
+		if (hmm_state == self.n_states-1) and (edit_op == Ops.IT.value) and (plu_top_index > 0) and (plu_bottom_index-plu_top_index < max_slip):
+			prev_states.extend([((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, op.value, plu_top_index-1), \
+				(p + log_prob_ops[Ops.IT.value] + log_prob_it[plu_tops[plu_top_index-1]])) for op in [Ops.IT, Ops.NONE]])
+
+		# Reverse of substitute op (for all possible previous bottom PLUs and edit ops)
+		if (hmm_state == 0) and (edit_op == Ops.SUB.value) and (plu_bottom_index > 0) and \
+				(plu_top_index > 0) and (frame_index > 0):
+			prev_states.extend([((frame_index-1, self.n_states-1, pb, plu_bottom_index-1, op.value, plu_top_index-1), \
+				(p + state_llh[frame_index-1,(pb*self.n_states)] + log_prob_ops[Ops.SUB.value] + log_prob_sub[pb*self.n_top_units+plu_tops[plu_top_index-1]] + math.log(0.5))) for pb in range(self.n_units) for op in Ops])
+
+		# Reverse of HMM-state-internal transition
+		if (edit_op != Ops.IT.value) and (frame_index > 0):
+			prev_states.append(((frame_index-1, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), \
+				(p + state_llh[frame_index-1,(plu_bottom_type*self.n_states+hmm_state)] + math.log(0.5))))
+
+		# Reverse of PLU-internal HMM state transition
+		if (edit_op != Ops.IT.value) and (hmm_state > 0) and (frame_index > 0):
+			prev_states.append(((frame_index-1, hmm_state-1, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), \
+				(p + state_llh[frame_index-1,(plu_bottom_type*self.n_states+hmm_state)] + math.log(0.5))))
+
+		return prev_states
 
 
 

@@ -7,4 +7,4 @@ features to automatically discover phone-like units.
 
 from .mixture import Mixture
 from .phone_loop import PhoneLoop
-
+from .phone_loop_noisy_channel import PhoneLoopNoisyChannel
