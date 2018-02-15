@@ -75,9 +75,9 @@ with dview.sync_imports():
     import amdtk
 
 
-fea_path_mask = '../audio/*fea'
+fea_path_mask = '../audio/icicles/*fea'
 fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
-top_path_mask = '../audio/*top'
+top_path_mask = '../audio/icicles/*top'
 top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
 
 zipped_paths = list(zip(fea_paths, top_paths))
@@ -93,6 +93,14 @@ data_stats = dview.map_sync(collect_data_stats, fea_paths)
 final_data_stats = accumulate_stats(data_stats)
 
 
+# Read top PLU sequence from file
+with open(top_paths[0], 'r') as f:
+    topstring = f.read()
+    tops = topstring.strip().split(',')
+    tops = [int(x) for x in tops]
+
+num_tops = max(tops)+1
+
 
 
 
@@ -107,10 +115,10 @@ def callback(args):
 print("Creating phone loop model...")
 conc = 0.1
 model = amdtk.PhoneLoopNoisyChannel.create(
-    n_units=10,  # number of acoustic units
+    n_units=20,  # number of acoustic units
     n_states=3,   # number of states per unit
     n_comp_per_state=4,   # number of Gaussians per emission
-    n_top_units=8, # size of top PLU alphabet
+    n_top_units=num_tops, # size of top PLU alphabet
     mean=np.zeros_like(final_data_stats['mean']), 
     var=np.ones_like(final_data_stats['var']) #,
     #concentration=conc
@@ -120,7 +128,7 @@ print("Creating VB optimizer...")
 optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
-    args= {'epochs': 5,
+    args= {'epochs': 10,
      'batch_size': 400,
      'lrate': 0.01},
     model=model,

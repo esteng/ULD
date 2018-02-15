@@ -29,6 +29,7 @@ from bisect import bisect
 from itertools import groupby
 from scipy.special import logsumexp
 
+from profilehooks import profile
 import math
 
 from .hmm_utils import create_phone_loop_transition_matrix
@@ -229,6 +230,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		log_prob_sub = self.sub_latent_posterior.grad_log_partition
 		n_frames = state_llh.shape[0]
 
+		frames_per_top = n_frames/len(plu_tops)
+
 		# Calculate forward probabilities WITH BACKPOINTERS
 		forward_probs = {}
 		# Insert starting items
@@ -238,14 +241,18 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		for plu_bottom_index in range(-1,max_plu_bottom_index):
 			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
 			print("len(forward_probs) = "+str(len(forward_probs)))
-			for plu_top_index in range(-1,len(plu_tops)):
+			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
+			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
+			for plu_top_index in range(pt_lower_limit, pt_upper_limit):
 				for plu_bottom_type in range(self.n_units):
 					for edit_op in Ops:
 						for hmm_state in range(self.n_states):
-							for frame_index in range(n_frames):
+							frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
+							frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+							for frame_index in range(frame_lower_limit, frame_upper_limit):
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
 								if curr_state in forward_probs:
-									nexts = self.next_states((curr_state, forward_probs[curr_state][0]), plu_tops, state_llh, max_slip)
+									nexts = self.next_states((curr_state, forward_probs[curr_state][0]), plu_tops, state_llh, max_slip, frames_per_top)
 									
 									for next_state_and_prob in nexts:
 										(next_state, prob) = next_state_and_prob
@@ -326,6 +333,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		return retval
 
+	#@profile(immediate=True)
 	def get_posteriors(self, s_stats, top_seq, accumulate=False):
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
@@ -422,6 +430,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		log_prob_sub = self.sub_latent_posterior.grad_log_partition
 		n_frames = state_llh.shape[0]
 
+		frames_per_top = n_frames/len(plu_tops)
+
 		# Calculate forward probabilities
 		forward_probs = {}
 		# Insert starting items
@@ -431,14 +441,18 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		for plu_bottom_index in range(-1,max_plu_bottom_index):
 			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
 			print("len(forward_probs) = "+str(len(forward_probs)))
-			for plu_top_index in range(-1,len(plu_tops)):
+			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
+			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
+			for plu_top_index in range(pt_lower_limit,pt_upper_limit):
 				for plu_bottom_type in range(self.n_units):
 					for edit_op in Ops:
 						for hmm_state in range(self.n_states):
-							for frame_index in range(n_frames):
+							frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
+							frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+							for frame_index in range(frame_lower_limit,frame_upper_limit):
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
 								if curr_state in forward_probs:
-									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip)
+									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip, frames_per_top)
 									for next_state_and_prob in nexts:
 										(next_state, prob) = next_state_and_prob
 										forward_probs[next_state] = np.logaddexp(forward_probs.get(next_state, 1), prob)
@@ -451,14 +465,16 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		for plu_bottom_index in range(max_plu_bottom_index-1, 0, -1):
 			print("backward ** plu_bottom_index = "+str(plu_bottom_index))
 			print("len(backward_probs) = "+str(len(backward_probs)))
-			for plu_top_index in range(len(plu_tops)-1, -1, -1):
+			for plu_top_index in range(min(len(plu_tops)-1, plu_bottom_index+max_slip), max(-1, plu_bottom_index-max_slip), -1):
 				for plu_bottom_type in range(self.n_units):
 					for edit_op in Ops:
 						for hmm_state in range(self.n_states-1,-1,-1):
-							for frame_index in range(n_frames-1,-1,-1):
+							frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
+							frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+							for frame_index in range(frame_upper_limit,frame_lower_limit,-1):
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
 								if curr_state in backward_probs:
-									prevs = self.prev_states((curr_state, backward_probs[curr_state]), plu_tops, n_frames, state_llh, max_slip)
+									prevs = self.prev_states((curr_state, backward_probs[curr_state]), plu_tops, n_frames, state_llh, max_slip, frames_per_top)
 									for prev_state_and_prob in prevs:
 										(prev_state, prob) = prev_state_and_prob
 										backward_probs[prev_state] = np.logaddexp(backward_probs.get(prev_state, 1), prob)
@@ -471,10 +487,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		log_sub_counts = np.ones(self.n_units*self.n_top_units)
 		for plu_bottom_index in range(-1,max_plu_bottom_index):
 			print("together ** plu_bottom_index = "+str(plu_bottom_index))
-			for plu_top_index in range(len(plu_tops)):
+			for plu_top_index in range(max(-1,plu_bottom_index-max_slip),min(len(plu_tops), plu_bottom_index+max_slip)):
 				for plu_bottom_type in range(self.n_units):
 					for edit_op in Ops:
 						for hmm_state in range(self.n_states):
+							frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
+							frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
 							for frame_index in range(n_frames):
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
 
@@ -548,7 +566,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	# Takes as input a tuple representing the current state
 	# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
 	# and returns a list containing tuples of the form (next_state, log_prob)
-	def next_states(self, current_state, plu_tops, state_llh, max_slip):
+	def next_states(self, current_state, plu_tops, state_llh, max_slip, frames_per_top):
 		((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
 
 		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
@@ -589,7 +607,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	# Takes as input a tuple representing the current state
 	# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
 	# and returns a list containing tuples of the form (next_state, log_prob)
-	def prev_states(self, current_state, plu_tops, n_frames, state_llh, max_slip):
+	def prev_states(self, current_state, plu_tops, n_frames, state_llh, max_slip, frames_per_top):
 		((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
 
 		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
