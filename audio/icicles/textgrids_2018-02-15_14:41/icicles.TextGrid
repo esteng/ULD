@@ -1,0 +1,114 @@
+File type = "ooTextFile"
+Object class = "TextGrid"
+
+xmin = 0.0
+xmax = 2.86
+tiers? <exists>
+size = 1
+item []:
+	item [1]:
+		class = "IntervalTier"
+		name = "phones"
+		xmin = 0.0
+		xmax = 2.86
+		intervals: size = 25
+			intervals [1]:
+				xmin = 0.0
+				xmax = 0.14
+				text = "3"
+			intervals [2]:
+				xmin = 0.14
+				xmax = 0.26
+				text = "1"
+			intervals [3]:
+				xmin = 0.26
+				xmax = 0.3
+				text = "3"
+			intervals [4]:
+				xmin = 0.3
+				xmax = 0.39
+				text = "1"
+			intervals [5]:
+				xmin = 0.39
+				xmax = 0.42
+				text = "7"
+			intervals [6]:
+				xmin = 0.42
+				xmax = 0.61
+				text = "0"
+			intervals [7]:
+				xmin = 0.61
+				xmax = 0.7000000000000001
+				text = "5"
+			intervals [8]:
+				xmin = 0.7000000000000001
+				xmax = 0.73
+				text = "6"
+			intervals [9]:
+				xmin = 0.73
+				xmax = 0.76
+				text = "2"
+			intervals [10]:
+				xmin = 0.76
+				xmax = 0.84
+				text = "1"
+			intervals [11]:
+				xmin = 0.84
+				xmax = 0.97
+				text = "7"
+			intervals [12]:
+				xmin = 0.97
+				xmax = 1.11
+				text = "0"
+			intervals [13]:
+				xmin = 1.11
+				xmax = 1.23
+				text = "7"
+			intervals [14]:
+				xmin = 1.23
+				xmax = 1.36
+				text = "9"
+			intervals [15]:
+				xmin = 1.36
+				xmax = 1.46
+				text = "7"
+			intervals [16]:
+				xmin = 1.46
+				xmax = 1.57
+				text = "0"
+			intervals [17]:
+				xmin = 1.57
+				xmax = 1.6
+				text = "8"
+			intervals [18]:
+				xmin = 1.6
+				xmax = 1.7
+				text = "1"
+			intervals [19]:
+				xmin = 1.7
+				xmax = 1.85
+				text = "0"
+			intervals [20]:
+				xmin = 1.85
+				xmax = 1.9000000000000001
+				text = "8"
+			intervals [21]:
+				xmin = 1.9000000000000001
+				xmax = 2.2600000000000002
+				text = "0"
+			intervals [22]:
+				xmin = 2.2600000000000002
+				xmax = 2.36
+				text = "7"
+			intervals [23]:
+				xmin = 2.36
+				xmax = 2.46
+				text = "3"
+			intervals [24]:
+				xmin = 2.46
+				xmax = 2.73
+				text = "6"
+			intervals [25]:
+				xmin = 2.73
+				xmax = 2.86
+				text = "0"
