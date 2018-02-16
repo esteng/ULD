@@ -27,7 +27,7 @@ def collect_data_stats(filename):
     # remotely.
 
     import sys 
-    sys.path.append("/Users/ekl/Documents/emily/uld/ULD/code/amdtk")
+    sys.path.append("./amdtk")
     import amdtk
     data = amdtk.read_htk(filename)
 
@@ -71,7 +71,7 @@ print('Connected to', len(dview), 'jobs.')
 
 with dview.sync_imports():
     import sys
-    sys.path.append("/Users/ekl/Documents/emily/uld/ULD/code/amdtk")
+    sys.path.append("./amdtk")
     import amdtk
 
 
@@ -80,8 +80,12 @@ fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
 top_path_mask = '../audio/icicles/*top'
 top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
 
+for path in fea_paths:
+    assert(os.path.exists(path))
+
 zipped_paths = list(zip(fea_paths, top_paths))
 
+assert(len(zipped_paths)>0)
 
 for path_pair in zipped_paths:
     print(path_pair)
@@ -128,7 +132,7 @@ print("Creating VB optimizer...")
 optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
-    args= {'epochs': 10,
+    args= {'epochs': 3,
      'batch_size': 400,
      'lrate': 0.01},
     model=model,
@@ -194,7 +198,13 @@ for (fea_path, top_path) in zipped_paths:
 
     #result = model.decode(data, tops, state_path=False)
     #result_path = model.decode(data, tops, state_path=True)
-    result_intervals = model.decode(data, tops, phone_intervals=True)
+    # result_intervals = model.decode(data, tops, phone_intervals=True)
+    result_intervals, groups = model.decode(data, tops, phone_intervals=True, context=True)
+
+    with open("../experiments/groups/g1.txt", "w") as f1:
+        for key,group in groups:
+            for top in group:
+                f1.write("{},{}\n".format(key,top))
     print("---")
     print("Phone sequence for file", fea_path, ":")
     print(result_intervals)

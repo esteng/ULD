@@ -215,7 +215,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return np.exp(log_units_stats)
 
 
-	def decode(self, data, plu_tops, state_path=False, phone_intervals=False):
+	def decode(self, data, plu_tops, state_path=False, phone_intervals=False, context=False):
 		s_stats = self.get_sufficient_stats(data)
 
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
@@ -290,15 +290,21 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		back_path.reverse()
 
 		path = [state[2] for state in back_path]
+		if context:
+			context = [(state[2], state[-1]) for state in back_path]
 
 		if phone_intervals:
 			groups = groupby(path)
+			if context:
+				context_groups = groupby(context, key=lambda x: x[0])
 			interval_path = []
 			begin_index = 0
 			for group in groups:
 				end_index = begin_index + sum(1 for item in group[1])
 				interval_path.append((group[0], begin_index, end_index))
 				begin_index = end_index
+			if context:
+				return interval_path, context_groups
 			return interval_path
 
 		else:
