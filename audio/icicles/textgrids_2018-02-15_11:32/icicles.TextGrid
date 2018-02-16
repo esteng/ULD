@@ -1,0 +1,118 @@
+File type = "ooTextFile"
+Object class = "TextGrid"
+
+xmin = 0.0
+xmax = 2.87
+tiers? <exists>
+size = 1
+item []:
+	item [1]:
+		class = "IntervalTier"
+		name = "phones"
+		xmin = 0.0
+		xmax = 2.87
+		intervals: size = 26
+			intervals [1]:
+				xmin = 0.0
+				xmax = 0.12
+				text = "8"
+			intervals [2]:
+				xmin = 0.12
+				xmax = 0.16
+				text = "0"
+			intervals [3]:
+				xmin = 0.16
+				xmax = 0.19
+				text = "8"
+			intervals [4]:
+				xmin = 0.19
+				xmax = 0.23
+				text = "6"
+			intervals [5]:
+				xmin = 0.23
+				xmax = 0.27
+				text = "7"
+			intervals [6]:
+				xmin = 0.27
+				xmax = 0.4
+				text = "6"
+			intervals [7]:
+				xmin = 0.4
+				xmax = 0.6900000000000001
+				text = "4"
+			intervals [8]:
+				xmin = 0.6900000000000001
+				xmax = 0.77
+				text = "1"
+			intervals [9]:
+				xmin = 0.77
+				xmax = 0.8
+				text = "0"
+			intervals [10]:
+				xmin = 0.8
+				xmax = 0.84
+				text = "6"
+			intervals [11]:
+				xmin = 0.84
+				xmax = 1.24
+				text = "4"
+			intervals [12]:
+				xmin = 1.24
+				xmax = 1.27
+				text = "8"
+			intervals [13]:
+				xmin = 1.27
+				xmax = 1.33
+				text = "0"
+			intervals [14]:
+				xmin = 1.33
+				xmax = 1.36
+				text = "2"
+			intervals [15]:
+				xmin = 1.36
+				xmax = 1.3900000000000001
+				text = "6"
+			intervals [16]:
+				xmin = 1.3900000000000001
+				xmax = 1.43
+				text = "8"
+			intervals [17]:
+				xmin = 1.43
+				xmax = 1.49
+				text = "1"
+			intervals [18]:
+				xmin = 1.49
+				xmax = 1.53
+				text = "6"
+			intervals [19]:
+				xmin = 1.53
+				xmax = 1.6400000000000001
+				text = "3"
+			intervals [20]:
+				xmin = 1.6400000000000001
+				xmax = 1.7
+				text = "5"
+			intervals [21]:
+				xmin = 1.7
+				xmax = 1.78
+				text = "8"
+			intervals [22]:
+				xmin = 1.78
+				xmax = 2.17
+				text = "4"
+			intervals [23]:
+				xmin = 2.17
+				xmax = 2.34
+				text = "9"
+			intervals [24]:
+				xmin = 2.34
+				xmax = 2.48
+				text = "0"
+			intervals [25]:
+				xmin = 2.48
+				xmax = 2.69
+				text = "6"
+			intervals [26]:
+				xmin = 2.69
+				xmax = 2.87
+				text = "0"
