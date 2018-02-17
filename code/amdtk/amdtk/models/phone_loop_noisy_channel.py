@@ -215,7 +215,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return np.exp(log_units_stats)
 
 
-	def decode(self, data, plu_tops, state_path=False, phone_intervals=False):
+	def decode(self, data, plu_tops, state_path=False, phone_intervals=False, edit_ops=False):
 		s_stats = self.get_sufficient_stats(data)
 
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
@@ -333,7 +333,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		return retval
 
-	#@profile(immediate=True)
+	@profile(immediate=True)
 	def get_posteriors(self, s_stats, top_seq, accumulate=False):
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
@@ -457,11 +457,19 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 										(next_state, prob) = next_state_and_prob
 										forward_probs[next_state] = np.logaddexp(forward_probs.get(next_state, 1), prob)
 
-		# Calculate backward probabilities
+		# Calculate backward probabilities, and also sum forwards+backwards probabilities in the same pass
 		backward_probs = {}
 		# Insert ending items
 		for (item, prob) in self.generate_end_items(plu_tops, state_llh, max_plu_bottom_index):
 			backward_probs[item] = prob
+
+		# Initialize data structures for expected counts of HMM states for each frame, and also expected counts of edit operations
+		log_state_counts = np.ones((self.n_units*self.n_states, n_frames))
+		log_ib_counts = np.ones(self.n_units)
+		log_it_counts = np.ones(self.n_top_units)
+		log_sub_counts = np.ones(self.n_units*self.n_top_units)
+
+
 		for plu_bottom_index in range(max_plu_bottom_index-1, 0, -1):
 			print("backward ** plu_bottom_index = "+str(plu_bottom_index))
 			print("len(backward_probs) = "+str(len(backward_probs)))
@@ -474,41 +482,58 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 							for frame_index in range(frame_upper_limit,frame_lower_limit,-1):
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
 								if curr_state in backward_probs:
+
+									# Update probabilities for previous states
 									prevs = self.prev_states((curr_state, backward_probs[curr_state]), plu_tops, n_frames, state_llh, max_slip, frames_per_top)
 									for prev_state_and_prob in prevs:
 										(prev_state, prob) = prev_state_and_prob
 										backward_probs[prev_state] = np.logaddexp(backward_probs.get(prev_state, 1), prob)
 
+									# Sum forwards & backwards probabilities
+									if curr_state in forward_probs:
+										fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
+
+										# Update edit operation expected counts
+										if edit_op.value == Ops.IB.value:
+											log_ib_counts[plu_bottom_type] = np.logaddexp(log_ib_counts[plu_bottom_type],fw_bw_prob)
+										elif edit_op.value == Ops.IT.value:
+											log_it_counts[plu_tops[plu_top_index]] = np.logaddexp(log_it_counts[plu_tops[plu_top_index]],fw_bw_prob)
+										elif edit_op.value == Ops.SUB.value:
+											log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]] = np.logaddexp(log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]],fw_bw_prob)
+
+										# Update per-frame HMM expected counts
+										log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], fw_bw_prob)
+
 		# Sum over forwards & backwards probabilities to get the expected counts
 		# We need expected counts of HMM states for each frame, and also expected counts of edit operations
-		log_state_counts = np.ones((self.n_units*self.n_states, n_frames))
-		log_ib_counts = np.ones(self.n_units)
-		log_it_counts = np.ones(self.n_top_units)
-		log_sub_counts = np.ones(self.n_units*self.n_top_units)
-		for plu_bottom_index in range(-1,max_plu_bottom_index):
-			print("together ** plu_bottom_index = "+str(plu_bottom_index))
-			for plu_top_index in range(max(-1,plu_bottom_index-max_slip),min(len(plu_tops), plu_bottom_index+max_slip)):
-				for plu_bottom_type in range(self.n_units):
-					for edit_op in Ops:
-						for hmm_state in range(self.n_states):
-							frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
-							frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-							for frame_index in range(n_frames):
-								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
+		# log_state_counts = np.ones((self.n_units*self.n_states, n_frames))
+		# log_ib_counts = np.ones(self.n_units)
+		# log_it_counts = np.ones(self.n_top_units)
+		# log_sub_counts = np.ones(self.n_units*self.n_top_units)
+		# for plu_bottom_index in range(-1,max_plu_bottom_index):
+		# 	print("together ** plu_bottom_index = "+str(plu_bottom_index))
+		# 	for plu_top_index in range(max(-1,plu_bottom_index-max_slip),min(len(plu_tops), plu_bottom_index+max_slip)):
+		# 		for plu_bottom_type in range(self.n_units):
+		# 			for edit_op in Ops:
+		# 				for hmm_state in range(self.n_states):
+		# 					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
+		# 					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+		# 					for frame_index in range(n_frames):
+		# 						curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
 
-								if curr_state in forward_probs and curr_state in backward_probs:
-									fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
+		# 						if curr_state in forward_probs and curr_state in backward_probs:
+		# 							fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
 
-									# Update edit operation expected counts
-									if edit_op.value == Ops.IB.value:
-										log_ib_counts[plu_bottom_type] = np.logaddexp(log_ib_counts[plu_bottom_type],fw_bw_prob)
-									elif edit_op.value == Ops.IT.value:
-										log_it_counts[plu_tops[plu_top_index]] = np.logaddexp(log_it_counts[plu_tops[plu_top_index]],fw_bw_prob)
-									elif edit_op.value == Ops.SUB.value:
-										log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]] = np.logaddexp(log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]],fw_bw_prob)
+		# 							# Update edit operation expected counts
+		# 							if edit_op.value == Ops.IB.value:
+		# 								log_ib_counts[plu_bottom_type] = np.logaddexp(log_ib_counts[plu_bottom_type],fw_bw_prob)
+		# 							elif edit_op.value == Ops.IT.value:
+		# 								log_it_counts[plu_tops[plu_top_index]] = np.logaddexp(log_it_counts[plu_tops[plu_top_index]],fw_bw_prob)
+		# 							elif edit_op.value == Ops.SUB.value:
+		# 								log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]] = np.logaddexp(log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]],fw_bw_prob)
 
-									# Update per-frame HMM expected counts
-									log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], fw_bw_prob)
+		# 							# Update per-frame HMM expected counts
+		# 							log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], fw_bw_prob)
 
 		print("len(forward_probs)")
 		print(len(forward_probs))
@@ -527,6 +552,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		print("log_state_counts")
 		print(log_state_counts)
+
+		print("Frames: "+str(n_frames)+"   Pb types: "+str(self.n_units)+"   Pt types: "+str(max(plu_tops)+1)+"   Pt indices: "+str(len(plu_tops)))
 
 		return log_ib_counts, log_it_counts, log_sub_counts, log_state_counts
 
