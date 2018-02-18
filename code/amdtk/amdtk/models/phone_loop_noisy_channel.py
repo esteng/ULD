@@ -25,6 +25,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 import numpy as np
+from numba import jit
 from bisect import bisect
 from itertools import groupby
 from scipy.special import logsumexp
@@ -40,13 +41,11 @@ from ..densities import Dirichlet, NormalGamma, NormalDiag
 
 from enum import Enum
 
-
 class Ops(Enum):
 	IB = 0
 	IT = 1
 	SUB = 2
 	NONE = 3
-
 
 class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	"""Bayesian Phone Loop model with noisy channel addition.
@@ -180,6 +179,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				self.state_log_weights[idx, :] = \
 					self.state_posteriors[idx].grad_log_partition
 
+	 
 	def _get_state_llh(self, s_stats):
 		# Evaluate the Gaussian log-likelihoods.
 		exp_llh = self.components_exp_llh(s_stats)
@@ -313,7 +313,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 	# DiscreteLatentModel interface.
 	# -----------------------------------------------------------------
-
+	
 	def kl_div_posterior_prior(self):
 		"""Kullback-Leibler divergence between prior /posterior.
 
@@ -340,6 +340,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return retval
 
 	#@profile(immediate=True)
+	
 	def get_posteriors(self, s_stats, top_seq, accumulate=False):
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
@@ -422,8 +423,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				comp.posterior.natural_params + lrate * grad
 
 		self.post_update()
-
-
+	@jit
 	def forward_backward_noisy_channel(self, plu_tops, state_llh):
 
 		n_frames = state_llh.shape[0]
@@ -613,6 +613,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	# Takes as input a tuple representing the current state
 	# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
 	# and returns a list containing tuples of the form (next_state, log_prob)
+
 	def prev_states(self, current_state, plu_tops, n_frames, state_llh, max_slip, frames_per_top):
 		((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
 

@@ -30,7 +30,7 @@ import abc
 import time
 import numpy as np
 from ipyparallel.util import interactive
-from amdtk import read_htk, read_tops
+from amdtk import read_htk
 
 
 class Optimizer(metaclass=abc.ABCMeta):
@@ -214,8 +214,7 @@ class NoisyChannelOptimizer(Optimizer):
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
-															 accumulate=True)
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True)
 
 			exp_llh += np.sum(llh)
 			n_frames += len(data)
