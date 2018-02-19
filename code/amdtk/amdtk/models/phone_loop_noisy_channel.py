@@ -345,8 +345,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
 		# The workhorse
-		log_ib_counts, log_it_counts, log_sub_counts, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh)
-
+		# log_ib_counts, log_it_counts, log_sub_counts, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh)
+		self.forward_backward_sample(top_seq, state_llh, 1)
 		# Compute the posteriors
 
 		log_edit_op_counts = np.array([logsumexp(log_ib_counts), logsumexp(log_it_counts), logsumexp(log_sub_counts)])
@@ -423,7 +423,66 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				comp.posterior.natural_params + lrate * grad
 
 		self.post_update()
-	@jit
+	def forward_backward_sample(self, plu_tops, state_llh, n_samples):
+		n_frames = state_llh.shape[0]
+		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
+		max_plu_bottom_index = len(plu_tops) + max_slip
+
+		log_prob_ops = self.op_type_latent_posterior.grad_log_partition
+		log_prob_ib = self.ib_latent_posterior.grad_log_partition
+		log_prob_it = self.it_latent_posterior.grad_log_partition
+		log_prob_sub = self.sub_latent_posterior.grad_log_partition
+		n_frames = state_llh.shape[0]
+
+		frames_per_top = n_frames/len(plu_tops)
+
+		# Calculate forward probabilities
+		forward_probs = {}
+		# Insert starting items
+		for (item, prob) in self.generate_start_items(plu_tops, state_llh):
+			forward_probs[item] = prob
+
+		for plu_bottom_index in range(-1,max_plu_bottom_index):
+			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
+			print("len(forward_probs) = "+str(len(forward_probs)))
+			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
+			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
+			for plu_top_index in range(pt_lower_limit,pt_upper_limit):
+				for plu_bottom_type in range(self.n_units):
+					for edit_op in Ops:
+						for hmm_state in range(self.n_states):
+							frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
+							frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+							for frame_index in range(frame_lower_limit,frame_upper_limit):
+								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
+								if curr_state in forward_probs:
+									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip, frames_per_top)
+									for next_state_and_prob in nexts:
+										(next_state, prob) = next_state_and_prob
+										forward_probs[next_state] = np.logaddexp(forward_probs.get(next_state, 1), prob)
+
+			
+		# sample backwards probs
+		end_items = self.generate_end_items(plu_tops, state_llh, max_plu_bottom_index)
+		backward_probs = {}
+		# Insert ending items
+		for (item, prob) in end_items:
+			backward_probs[item] = prob
+		for s in range(n_samples):
+			for (item, _) in end_items:
+				prevs = self.prev_states((item, backward_probs[item]), plu_tops, n_frames, state_llh, max_slip, frames_per_top)
+				prev_states, prev_probs = zip(*prevs)
+				print(sum(np.exp(prev_probs)), 0)
+				state_choice = np.random.choice(prev_states, p=np.exp(prev_probs))
+				print(state_choice)
+				for p in prevs:
+					print("hello")
+					print(p)
+				# value = forward_probs.get(item, (float("-inf"), None))
+				if value[0] > best_prob:
+					best_prob = forward_probs[item][0]
+					best_item = item
+
 	def forward_backward_noisy_channel(self, plu_tops, state_llh):
 
 		n_frames = state_llh.shape[0]
