@@ -30,7 +30,7 @@ import abc
 import time
 import numpy as np
 from ipyparallel.util import interactive
-from amdtk import read_htk, read_tops
+from amdtk import read_htk
 
 
 class Optimizer(metaclass=abc.ABCMeta):
