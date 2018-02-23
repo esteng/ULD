@@ -74,10 +74,11 @@ with dview.sync_imports():
     sys.path.append("./amdtk")
     import amdtk
 
+audio_dir = '../audio/icicles'
 
-fea_path_mask = '../audio/icicles/*fea'
+fea_path_mask = os.path.join(audio_dir, '*fea')
 fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
-top_path_mask = '../audio/icicles/*top'
+top_path_mask = os.path.join(audio_dir,'*top')
 top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
 
 for path in fea_paths:
@@ -132,7 +133,7 @@ print("Creating VB optimizer...")
 optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
-    args= {'epochs': 3,
+    args= {'epochs': 5,
      'batch_size': 400,
      'lrate': 0.01},
     model=model,
@@ -198,16 +199,21 @@ for (fea_path, top_path) in zipped_paths:
 
     #result = model.decode(data, tops, state_path=False)
     #result_path = model.decode(data, tops, state_path=True)
-    # result_intervals = model.decode(data, tops, phone_intervals=True)
-    result_intervals, groups = model.decode(data, tops, phone_intervals=True, context=True)
+# <<<<<<< HEAD
+#     # result_intervals = model.decode(data, tops, phone_intervals=True)
+#     result_intervals, groups = model.decode(data, tops, phone_intervals=True, context=True)
 
-    with open("../experiments/groups/g1.txt", "w") as f1:
-        for key,group in groups:
-            for top in group:
-                f1.write("{},{}\n".format(key,top))
+#     with open("../experiments/groups/g1.txt", "w") as f1:
+#         for key,group in groups:
+#             for top in group:
+#                 f1.write("{},{}\n".format(key,top))
+# =======
+    (result_intervals, edit_path) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
+
     print("---")
     print("Phone sequence for file", fea_path, ":")
     print(result_intervals)
+    print(edit_path)
 
     #print(result_intervals)
     
@@ -231,7 +237,7 @@ for (fea_path, top_path) in zipped_paths:
     write_textgrids = True
 
     if write_textgrids:
-        output_dir = os.path.join('..', 'audio', date_string)
+        output_dir = os.path.join(audio_dir, date_string)
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
         amdtk.utils.write_textgrid(result_intervals, 
