@@ -14,3 +14,7 @@ writeups/MTL-AI-abstract/abstract.dvi
 
 # Ignore __pycache__ directories
 /**/__pycache__/
+
+# Ignore textgrids directories
+/**/textgrids*
+

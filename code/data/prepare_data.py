@@ -4,7 +4,7 @@ import subprocess
 import argparse 
 import textgrid as tg
 
-def convert_dir(src_path, mfcc_dest, conf):
+def convert_dir(wav_path, tg_path, mfcc_dest, conf):
     for root, dirs, files in os.walk(src_path):
         for filename in files:
             if filename.endswith(".wav"):
@@ -13,7 +13,7 @@ def convert_dir(src_path, mfcc_dest, conf):
             if filename.endswith(".TextGrid"):
                 src_path = os.path.join(root, filename)
                 print(filename)
-                get_textgrid(src_path, mfcc_dest)
+                get_textgrid(tg_path, mfcc_dest)
 
 def mfcc(src, dest, conf):
     src_filename = re.sub("\.wav", "", os.path.split(src)[-1])

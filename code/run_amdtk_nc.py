@@ -125,7 +125,8 @@ model = amdtk.PhoneLoopNoisyChannel.create(
     n_comp_per_state=4,   # number of Gaussians per emission
     n_top_units=num_tops, # size of top PLU alphabet
     mean=np.zeros_like(final_data_stats['mean']), 
-    var=np.ones_like(final_data_stats['var']) #,
+    var=np.ones_like(final_data_stats['var']),
+    max_slip_factor=.05
     #concentration=conc
 )
  
