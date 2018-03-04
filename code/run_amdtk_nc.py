@@ -99,13 +99,16 @@ data_stats = dview.map_sync(collect_data_stats, fea_paths)
 # Accumulate the statistics over all the utterances.
 final_data_stats = accumulate_stats(data_stats)
 
-
+tops = []
 # Read top PLU sequence from file
-with open(top_paths[0], 'r') as f:
-    topstring = f.read()
-    tops = topstring.strip().split(',')
-    tops = [int(x) for x in tops]
+for top_path in top_paths:
+	with open(top_path, 'r') as f:
+	    topstring = f.read()
+	    top_list = topstring.strip().split(',')
+	    tops += [int(x) for x in top_list]
 
+
+print(tops)
 num_tops = max(tops)+1
 
 
