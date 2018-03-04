@@ -45,8 +45,15 @@ def call_back(*args):
 
 def export_textgrid(config, path, wav_path=None):
 	with CorpusContext(config) as c:
+		print("got context")
 		discourses = c.discourses
 		levels = c.hierarchy.annotation_types
+		# get all phones
+		q=c.query_graph(c.phone)
+		phones = set([phone.label for phone in q.all()])
+		mapping = {phone:i for i,phone in enumerate(sorted(phones))}
+
+
 		for d in discourses:
 			grid = tg.TextGrid()
 			tier = tg.IntervalTier()
@@ -55,7 +62,7 @@ def export_textgrid(config, path, wav_path=None):
 			q = q.filter(c.phone.discourse.name == d)
 			q = q.order_by(c.phone.begin)
 			res = q.all()
-
+			print("res is ", len(res))
 			for phone in res:
 				tier.add(phone.begin/SAM_RATE, phone.end/SAM_RATE, phone.label)
 			grid.append(tier)
@@ -67,7 +74,7 @@ def export_textgrid(config, path, wav_path=None):
 				os.mkdir(per_speaker_path)
 			grid.write(os.path.join(per_speaker_path, filename))
 			top_filename = just_file + ".top"
-			export_tops(res, os.path.join(per_speaker_path, top_filename))
+			export_tops(mapping, os.path.join(per_speaker_path, top_filename))
 			if wav_path is not None:
 				try:
 					print("running ", just_file)
@@ -76,18 +83,15 @@ def export_textgrid(config, path, wav_path=None):
 				except KeyError:
 					pass
 
-def export_tops(phones, path):
+def export_tops(mapping, path):
 	with open(path, "w") as f1:
-		just_phones = [x.label for x in phones]
-		phone_set = set(just_phones)
-		mapping = {phone:str(i) for i, phone in enumerate(list(sorted(phone_set)))}
 		int_phones = [mapping[x] for x in just_phones]
 		f1.write(",".join(int_phones) + "\n")
 
 
 def mfcc(src, dest, conf):
 	print("running ", src)
-	src_filename = re.sub("\.wav", "", os.path.split(src)[-1])
+	src_filename = re.sub("\.[Ww][Aa][Vv]", "", os.path.split(src)[-1])
 	dest_filename = os.path.join(dest, src_filename + ".fea")
 	subprocess.Popen(['hcopy', '-C', conf, src, dest_filename])
 	print("wrote to ", dest)
@@ -98,18 +102,22 @@ if __name__ == '__main__':
 	parser.add_argument("--reset", help="set to true to reset corpus", default=False)
 	parser.add_argument("--convert", help="set to true if converting mfccs", default=False)
 	args = parser.parse_args()
-
+	print("parsed")
 
 	corpus_name = "TIMIT"
 	with ensure_local_database_running('database') as config:
+		print("ensured")
 		conf = CorpusConfig(corpus_name, **config)
 		if args.reset:
 			loading(conf, args.timit_path)
 		if args.convert:
+			print("converting")
 			filename_to_path = {}
 			for root, dirs, files in os.walk(args.timit_path):
 				for file in files:
 					if re.match(".*\.[Ww][Aa][Vv]", file) is not None:
+						print(file)
+
 						src_filename = re.sub("\.[Ww][Aa][Vv]", "", file)
 						path = os.path.join(root, file)
 						filename_to_path[src_filename] = path

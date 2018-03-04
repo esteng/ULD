@@ -2,6 +2,7 @@ import glob
 import os
 import numpy as np
 import time as systime
+import re 
 
 from bokeh.plotting import show
 from bokeh.io import output_notebook
@@ -74,7 +75,7 @@ with dview.sync_imports():
     sys.path.append("./amdtk")
     import amdtk
 
-audio_dir = '../audio/icicles'
+audio_dir = '../audio/TIMIT/FAKS0'
 
 fea_path_mask = os.path.join(audio_dir, '*fea')
 fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
@@ -84,12 +85,13 @@ top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
 for path in fea_paths:
     assert(os.path.exists(path))
 
-zipped_paths = list(zip(fea_paths, top_paths))
+zipped_paths = list(zip(sorted(fea_paths), sorted(top_paths)))
 
 assert(len(zipped_paths)>0)
 
 for path_pair in zipped_paths:
     print(path_pair)
+    assert(re.sub("\.fea", "", path_pair[0]) == re.sub("\.top", "", path_pair[1]))
 
 print("Getting mean and variance of input data...")
 data_stats = dview.map_sync(collect_data_stats, fea_paths)
