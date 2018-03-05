@@ -120,6 +120,7 @@ model = amdtk.PhoneLoopNoisyChannel.create(
     n_states=3,   # number of states per unit
     n_comp_per_state=4,   # number of Gaussians per emission
     n_top_units=num_tops, # size of top PLU alphabet
+    max_slip_factor=0.05,
     mean=np.zeros_like(final_data_stats['mean']), 
     var=np.ones_like(final_data_stats['var']) #,
     #concentration=conc
@@ -129,7 +130,7 @@ print("Creating VB optimizer...")
 optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
-    args= {'epochs': 5,
+    args= {'epochs': 1,
      'batch_size': 400,
      'lrate': 0.01},
     model=model,
