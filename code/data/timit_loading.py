@@ -48,6 +48,12 @@ def export_textgrid(config, path, wav_path=None):
 		print("got context")
 		discourses = c.discourses
 		levels = c.hierarchy.annotation_types
+		# get all phones
+		q=c.query_graph(c.phone)
+		phones = set([phone.label for phone in q.all()])
+		mapping = {phone:i for i,phone in enumerate(sorted(phones))}
+
+
 		for d in discourses:
 			grid = tg.TextGrid()
 			tier = tg.IntervalTier()
@@ -56,6 +62,7 @@ def export_textgrid(config, path, wav_path=None):
 			q = q.filter(c.phone.discourse.name == d)
 			q = q.order_by(c.phone.begin)
 			res = q.all()
+			print("res is ", len(res))
 			for phone in res:
 				tier.add(phone.begin/SAM_RATE, phone.end/SAM_RATE, phone.label)
 			grid.append(tier)
@@ -67,7 +74,7 @@ def export_textgrid(config, path, wav_path=None):
 				os.mkdir(per_speaker_path)
 			grid.write(os.path.join(per_speaker_path, filename))
 			top_filename = just_file + ".top"
-			export_tops(res, os.path.join(per_speaker_path, top_filename))
+			export_tops(mapping, os.path.join(per_speaker_path, top_filename))
 			if wav_path is not None:
 				try:
 					print("running ", just_file)
@@ -76,11 +83,8 @@ def export_textgrid(config, path, wav_path=None):
 				except KeyError:
 					pass
 
-def export_tops(phones, path):
+def export_tops(mapping, path):
 	with open(path, "w") as f1:
-		just_phones = [x.label for x in phones]
-		phone_set = set(just_phones)
-		mapping = {phone:str(i) for i, phone in enumerate(list(sorted(phone_set)))}
 		int_phones = [mapping[x] for x in just_phones]
 		f1.write(",".join(int_phones) + "\n")
 

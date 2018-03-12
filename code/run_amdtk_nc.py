@@ -12,7 +12,9 @@ from ipyparallel import Client
 
 
 import sys
-sys.path.insert(0, 'amdtk')
+# sys.path.insert(0, './amdtk')
+# sys.path.append("/Users/Elias/ULD/code/amdtk")
+DEBUG = True
 
 import amdtk
 
@@ -26,11 +28,10 @@ def collect_data_stats(filename):
     """Job to collect the statistics."""
     # We  re-import this module here because this code will run
     # remotely.
-
-    import sys 
-    sys.path.append("./amdtk")
     import amdtk
+
     data = amdtk.read_htk(filename)
+    amdtk.utils.test_import()
 
     stat_length = data.shape[0]
     stat_sum = data.sum(axis=0)
@@ -67,20 +68,40 @@ def accumulate_stats(list_of_stats):
 
 
 rc = Client(profile='default')
+rc.debug = DEBUG
 dview = rc[:]
 print('Connected to', len(dview), 'jobs.')
 
+# with dview.sync_imports():
+#     import sys
+#     # sys.path.append("/Users/Elias/ULD/code/amdtk")
+#     sys.path.insert(0, './amdtk')
+#     import amdtk
+
 with dview.sync_imports():
     import sys
-    sys.path.append("./amdtk")
     import amdtk
 
 audio_dir = '../audio/TIMIT/FAKS0'
 
-fea_path_mask = os.path.join(audio_dir, '*fea')
-fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
-top_path_mask = os.path.join(audio_dir,'*top')
-top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
+audio_dir = os.path.abspath(audio_dir)
+
+# fea_path_mask = os.path.join(audio_dir, '*fea')
+
+fea_paths = []
+top_paths = []
+
+for root, dirs, files in os.walk(audio_dir):
+	for file in files:
+		if file.lower().endswith(".fea"): 
+			fea_paths.append(os.path.join(root,file))
+		if file.lower().endswith(".top"):
+			top_paths.append(os.path.join(root, file))
+
+
+# fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
+# top_path_mask = os.path.join(audio_dir,'*top')
+# top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
 
 for path in fea_paths:
     assert(os.path.exists(path))
@@ -99,12 +120,14 @@ data_stats = dview.map_sync(collect_data_stats, fea_paths)
 # Accumulate the statistics over all the utterances.
 final_data_stats = accumulate_stats(data_stats)
 
-
+tops = []
 # Read top PLU sequence from file
-with open(top_paths[0], 'r') as f:
-    topstring = f.read()
-    tops = topstring.strip().split(',')
-    tops = [int(x) for x in tops]
+for top_path in top_paths:
+	with open(top_path, 'r') as f:
+	    topstring = f.read()
+	    top_list = topstring.strip().split(',')
+	    tops += [int(x) for x in top_list]
+
 
 num_tops = max(tops)+1
 
@@ -202,15 +225,6 @@ for (fea_path, top_path) in zipped_paths:
 
     #result = model.decode(data, tops, state_path=False)
     #result_path = model.decode(data, tops, state_path=True)
-# <<<<<<< HEAD
-#     # result_intervals = model.decode(data, tops, phone_intervals=True)
-#     result_intervals, groups = model.decode(data, tops, phone_intervals=True, context=True)
-
-#     with open("../experiments/groups/g1.txt", "w") as f1:
-#         for key,group in groups:
-#             for top in group:
-#                 f1.write("{},{}\n".format(key,top))
-# =======
     (result_intervals, edit_path) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
 
     print("---")
