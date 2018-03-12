@@ -12,7 +12,9 @@ from ipyparallel import Client
 
 
 import sys
-sys.path.insert(0, 'amdtk')
+# sys.path.insert(0, './amdtk')
+# sys.path.append("/Users/Elias/ULD/code/amdtk")
+DEBUG = True
 
 import amdtk
 
@@ -26,11 +28,10 @@ def collect_data_stats(filename):
     """Job to collect the statistics."""
     # We  re-import this module here because this code will run
     # remotely.
-
-    import sys 
-    sys.path.append("./amdtk")
     import amdtk
+
     data = amdtk.read_htk(filename)
+    amdtk.utils.test_import()
 
     stat_length = data.shape[0]
     stat_sum = data.sum(axis=0)
@@ -67,20 +68,40 @@ def accumulate_stats(list_of_stats):
 
 
 rc = Client(profile='default')
+rc.debug = DEBUG
 dview = rc[:]
 print('Connected to', len(dview), 'jobs.')
 
+# with dview.sync_imports():
+#     import sys
+#     # sys.path.append("/Users/Elias/ULD/code/amdtk")
+#     sys.path.insert(0, './amdtk')
+#     import amdtk
+
 with dview.sync_imports():
     import sys
-    sys.path.append("./amdtk")
     import amdtk
 
-audio_dir = '../audio/TIMIT/FAKS0'
 
-fea_path_mask = os.path.join(audio_dir, '*fea')
-fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
-top_path_mask = os.path.join(audio_dir,'*top')
-top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
+audio_dir = '../audio/icicles'
+audio_dir = os.path.abspath(audio_dir)
+
+# fea_path_mask = os.path.join(audio_dir, '*fea')
+
+fea_paths = []
+top_paths = []
+
+for root, dirs, files in os.walk(audio_dir):
+	for file in files:
+		if file.lower().endswith(".fea"): 
+			fea_paths.append(os.path.join(root,file))
+		if file.lower().endswith(".top"):
+			top_paths.append(os.path.join(root, file))
+
+
+# fea_paths = [os.path.abspath(fname) for fname in glob.glob(fea_path_mask)]
+# top_path_mask = os.path.join(audio_dir,'*top')
+# top_paths = [os.path.abspath(fname) for fname in glob.glob(top_path_mask)]
 
 for path in fea_paths:
     assert(os.path.exists(path))
@@ -90,7 +111,6 @@ zipped_paths = list(zip(sorted(fea_paths), sorted(top_paths)))
 assert(len(zipped_paths)>0)
 
 for path_pair in zipped_paths:
-    print(path_pair)
     assert(re.sub("\.fea", "", path_pair[0]) == re.sub("\.top", "", path_pair[1]))
 
 print("Getting mean and variance of input data...")
@@ -108,7 +128,6 @@ for top_path in top_paths:
 	    tops += [int(x) for x in top_list]
 
 
-print(tops)
 num_tops = max(tops)+1
 
 

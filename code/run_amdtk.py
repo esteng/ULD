@@ -1,7 +1,9 @@
+
 import glob
 import os
 import numpy as np
 import time as systime
+import shutil
 
 from bokeh.plotting import show
 from bokeh.io import output_notebook
@@ -11,12 +13,14 @@ from ipyparallel import Client
 
 
 import sys
-sys.path.insert(0, 'amdtk')
+# sys.path.insert(0, './amdtk')
 
 import amdtk
+print(amdtk.__file__)
 
 print("successfully completed imports")
 amdtk.utils.test_import()
+
 
 # I assume the reason this is parallelized is because
 # for large amounts of data it could be very slow?
@@ -25,11 +29,10 @@ def collect_data_stats(filename):
     """Job to collect the statistics."""
     # We  re-import this module here because this code will run
     # remotely.
-
-    import sys 
-    sys.path.append("/Users/Elias/ULD/code/amdtk")
     import amdtk
+
     data = amdtk.read_htk(filename)
+    amdtk.utils.test_import()
 
     stat_length = data.shape[0]
     stat_sum = data.sum(axis=0)
@@ -67,11 +70,12 @@ def accumulate_stats(list_of_stats):
 
 rc = Client(profile='default')
 dview = rc[:]
+
+
 print('Connected to', len(dview), 'jobs.')
 
 with dview.sync_imports():
     import sys
-    sys.path.append("/Users/Elias/ULD/code/amdtk")
     import amdtk
 
 #path = ['../audio_test/falr0_sx425.fea']
@@ -80,7 +84,7 @@ with dview.sync_imports():
 
 #paths = ['../audio/abonza_lininisa.fea'] #, '../audio_test/falr0_sx425.fea']
 
-path_mask = '../audio/*fea'
+path_mask = '../audio/icicles/*fea'
 paths = [os.path.abspath(fname) for fname in glob.glob(path_mask)]
 
 
