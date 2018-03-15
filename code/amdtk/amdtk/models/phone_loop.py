@@ -175,7 +175,7 @@ class PhoneLoop(DiscreteLatentModel):
 
         return np.exp(log_units_stats)
 
-    def decode(self, data, state_path=False, phone_intervals=False):
+    def decode(self, data, state_path=False):
         s_stats = self.get_sufficient_stats(data)
 
         state_llh, c_given_s_resps = self._get_state_llh(s_stats)
@@ -187,22 +187,8 @@ class PhoneLoop(DiscreteLatentModel):
             self.final_states,
             state_llh
         )
-
-        if state_path:
-            return path
-
-
-        path = [bisect(self.init_states, state) for state in path]
-        if phone_intervals:
-            groups = groupby(path)
-            path = []
-            begin_index = 0
-            for group in groups:
-                end_index = begin_index + sum(1 for item in group[1])
-                path.append((group[0], begin_index, end_index))
-                begin_index = end_index
-
-        else:
+        if not state_path:
+            path = [bisect(self.init_states, state) for state in path]
             path = [x[0] for x in groupby(path)]
 
         return path

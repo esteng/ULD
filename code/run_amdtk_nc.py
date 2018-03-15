@@ -9,62 +9,56 @@ from bokeh.io import output_notebook
 from bokeh.plotting import figure
 from bokeh.layouts import gridplot
 from ipyparallel import Client
-
+import _pickle as pickle
 
 import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
-DEBUG = True
-
+DEBUG = False
+resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
 import amdtk
+import subprocess
 
 print("successfully completed imports")
-amdtk.utils.test_import()
 
-# I assume the reason this is parallelized is because
-# for large amounts of data it could be very slow?
 def collect_data_stats(filename):
-    print("filename:", filename)
     """Job to collect the statistics."""
     # We  re-import this module here because this code will run
     # remotely.
     import amdtk
-
     data = amdtk.read_htk(filename)
-    amdtk.utils.test_import()
-
-    stat_length = data.shape[0]
-    stat_sum = data.sum(axis=0)
-    stat_squared_sum = (data**2).sum(axis=0)
-    return (
-        stat_length,
-        stat_sum,
-        stat_squared_sum
+    stats_0 = data.shape[0]
+    stats_1 = data.sum(axis=0)
+    stats_2 = (data**2).sum(axis=0)
+    retval = (
+        stats_0,
+        stats_1,
+        stats_2
     )
+    return retval
 
-def accumulate_stats(list_of_stats):
-    n_frames = 0
-    mean = 0
-    var = 0
-    for stat_length, stat_sum, stat_squared_sum in list_of_stats:
-        n_frames += stat_length
-        mean += stat_sum
-        var += stat_squared_sum
+
+def accumulate_stats(data_stats):
+    n_frames = data_stats[0][0]
+    mean = data_stats[0][1]
+    var = data_stats[0][2]
+    for stats_0, stats_1, stats_2 in data_stats[1:]:
+        n_frames += stats_0
+        mean += stats_1
+        var += stats_2
     mean /= n_frames
     var = (var / n_frames) - mean**2
 
-    return {
+    data_stats = {
         'count': n_frames,
         'mean': mean,
         'var': var
     }
+    return data_stats
 
-# fname = '/path/to/features.fea'
-# fname_vad = fname + '[10:100]'
-# data = amdtk.read_htk(fname_vad)
 
-# path = '../audio_test/falr0_sx425.fea'
-# data = amdtk.read_htk(path)
+subprocess.Popen(['ipcluster', 'start',' --profile', 'default',' -n', '4', '--daemonize'])
+subprocess.Popen(['sleep', '10']).communicate()
 
 
 rc = Client(profile='default')
@@ -72,17 +66,9 @@ rc.debug = DEBUG
 dview = rc[:]
 print('Connected to', len(dview), 'jobs.')
 
-# with dview.sync_imports():
-#     import sys
-#     # sys.path.append("/Users/Elias/ULD/code/amdtk")
-#     sys.path.insert(0, './amdtk')
-#     import amdtk
 
-with dview.sync_imports():
-    import sys
-    import amdtk
-
-audio_dir = '../audio/TIMIT/FAKS0'
+print("done importing!")
+audio_dir = '../audio/icicles'
 
 audio_dir = os.path.abspath(audio_dir)
 
@@ -114,6 +100,7 @@ for path_pair in zipped_paths:
     print(path_pair)
     assert(re.sub("\.fea", "", path_pair[0]) == re.sub("\.top", "", path_pair[1]))
 
+
 print("Getting mean and variance of input data...")
 data_stats = dview.map_sync(collect_data_stats, fea_paths)
 
@@ -144,42 +131,51 @@ def callback(args):
 
 print("Creating phone loop model...")
 conc = 0.1
-model = amdtk.PhoneLoopNoisyChannel.create(
-    n_units=20,  # number of acoustic units
-    n_states=3,   # number of states per unit
-    n_comp_per_state=4,   # number of Gaussians per emission
-    n_top_units=num_tops, # size of top PLU alphabet
-    mean=np.zeros_like(final_data_stats['mean']), 
-    var=np.ones_like(final_data_stats['var']),
-    max_slip_factor=.05
-    #concentration=conc
-)
- 
+
+if resume == None:
+
+    model = amdtk.PhoneLoopNoisyChannel.create(
+        n_units=20,  # number of acoustic units
+        n_states=3,   # number of states per unit
+        n_comp_per_state=4,   # number of Gaussians per emission
+        n_top_units=num_tops, # size of top PLU alphabet
+        mean=np.zeros_like(final_data_stats['mean']), 
+        var=np.ones_like(final_data_stats['var']),
+        max_slip_factor=.05
+        #concentration=conc
+    )
+     
+else:
+    with open(resume, 'rb') as f1:
+        model = pickle.load(f1)
 print("Creating VB optimizer...")   
 optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
-    args= {'epochs': 5,
-     'batch_size': 400,
-     'lrate': 0.01},
+    args= {'epochs': 1,
+     'batch_size': 10,
+     'lrate': 0.01,
+     'pkl_path': "pkl_test/",
+     'log_dir': 'logs'},
     model=model,
 
 )
 
 print("Running VB optimization...")
 begin = systime.time()
+print("running with {} paths".format(len(list(zipped_paths))))
 optimizer.run(zipped_paths, callback)
 end = systime.time()
 print("VB optimization took ",end-begin," seconds.")
 
-fig1 = figure(
-    x_axis_label='time (s)', 
-    y_axis_label='ELBO',
-    width=400, 
-    height=400
-)
-x = np.arange(0, len(elbo), 1)
-fig1.line(x, elbo)
+# fig1 = figure(
+#     x_axis_label='time (s)', 
+#     y_axis_label='ELBO',
+#     width=400, 
+#     height=400
+# )
+# x = np.arange(0, len(elbo), 1)
+# fig1.line(x, elbo)
 #show(fig1)
 
 print("\nDECODING\n")
@@ -188,22 +184,6 @@ date_string = systime.strftime("textgrids_%Y-%m-%d_%H:%M")
 
 # Need to change this according to 
 samples_per_sec = 100
-
-def print_bar_graph(dictionary, max_x=20):
-    maximum = max(dictionary.values())
-    num_per_x = max(round(maximum/20),1)
-    graph_items = []
-    for key,value in sorted(dictionary.items()):
-        how_many_xs = round(value/num_per_x)
-        xs = 'x' * how_many_xs
-        if xs=='' and value > 0:
-            xs = '.'
-        num_string = '('+str(key)+', {0:.2f}) '.format(value)
-        graph_items.append((num_string, xs))
-    max_len = max([len(x[0]) for x in graph_items])
-    for item in graph_items:
-        space_padding = ' ' * (max_len-len(item[0]))
-        print(item[0]+space_padding+item[1])
 
 
 for (fea_path, top_path) in zipped_paths:
@@ -264,7 +244,6 @@ for (fea_path, top_path) in zipped_paths:
         print("Wrote textgrids to", output_dir)
 
 print("success")
+subprocess.Popen(['ipcluster' ,'stop', '--profile', 'default'])
 
-'''
-'''
 

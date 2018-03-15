@@ -77,7 +77,6 @@ class NormalDiag(EFDLikelihood):
 
         """
         length = len(data)
-        print("inside normal, data is ", type(data))
         return np.c_[data**2, data, np.ones((length, 2 * data.shape[1]))]
 
     def __init__(self, prior, posterior):

@@ -84,7 +84,7 @@ with dview.sync_imports():
 
 #paths = ['../audio/abonza_lininisa.fea'] #, '../audio_test/falr0_sx425.fea']
 
-path_mask = '../audio/icicles/*fea'
+path_mask = '../audio/TIMIT/FAKS0/*fea'
 paths = [os.path.abspath(fname) for fname in glob.glob(path_mask)]
 
 

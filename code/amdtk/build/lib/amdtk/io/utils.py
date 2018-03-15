@@ -22,7 +22,6 @@ from struct import unpack, pack
 import os
 import operator
 import numpy as np
-import textgrid as tg
 
 # HTK format constants.
 LPC = 1
@@ -564,14 +563,3 @@ def write_textgrid(phone_sequence, sample_rate, filename):
     my_textgrid.write(filename)
 
     pass
-
-def test_import():
-    print("import successful :)")
-
-
-
-
-
-
-
-    

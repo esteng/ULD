@@ -60,3 +60,4 @@ class Dirichlet(EFDPrior):
     def __init__(self, prior_counts):
         EFDPrior.__init__(self)
         self.natural_params = np.asarray(prior_counts - 1, dtype=float)
+
