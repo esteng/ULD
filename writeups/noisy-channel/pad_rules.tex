@@ -156,7 +156,7 @@ The unpruned chart, under the 3-state-HMM implementation, has the following dime
 \begin{itemize}
 	\item The number of PLU top indices has an approximately linear relationship with the number of frames (and is upper bounded by it). We can express this as $m=O(i)$.
 	\item Likewise, the number of PLU bottom indices also has an approximately linear relationship with $i$, so $a=O(i)$. 
-	\item Therefore, $n=O(Ai^3)$. In other words, the number of chart items the cube of the number of frames and linearly as the number of PLU bottom types.
+	\item Therefore, $n=O(Ai^3)$. In other words, the number of chart items grows as the cube of the number of frames and linearly as the number of PLU bottom types.
 \end{itemize}
 
 \noindent Full chart for a typical 15-second utterance contains approximately $1.4 \times 10^{10}$ items.
