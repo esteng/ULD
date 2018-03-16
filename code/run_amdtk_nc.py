@@ -3,6 +3,7 @@ import os
 import numpy as np
 import time as systime
 import re 
+import textgrid as tg
 
 from bokeh.plotting import show
 from bokeh.io import output_notebook
@@ -100,7 +101,7 @@ for path_pair in zipped_paths:
     print(path_pair)
     assert(re.sub("\.fea", "", path_pair[0]) == re.sub("\.top", "", path_pair[1]))
 
-
+print("There are {} files".format(len(fea_paths)))
 print("Getting mean and variance of input data...")
 data_stats = dview.map_sync(collect_data_stats, fea_paths)
 

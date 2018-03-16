@@ -22,6 +22,7 @@ from struct import unpack, pack
 import os
 import operator
 import numpy as np
+import textgrid as tg
 
 # HTK format constants.
 LPC = 1

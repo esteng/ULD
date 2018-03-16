@@ -41,7 +41,7 @@ class Optimizer(metaclass=abc.ABCMeta):
         self.pkl_path = args.get("pkl_path", None)
         self.log_dir = args.get("log_dir", None)
         if self.log_dir is not None:
-        	self.log_file = self.log_dir + time.strftime("opt_%Y-%m-%d_%H:%M.log")
+        	self.log_file = self.log_dir  + "/" + time.strftime("opt_%Y-%m-%d_%H:%M.log")
 
         print("log dir: ", self.log_dir, "log file", self.log_file)
         self.model = model
