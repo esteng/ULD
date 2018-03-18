@@ -1,0 +1,10 @@
+- pypy or other JIT compiler
+- check hashing/rehashing stuff
+	• try to fix size of hash table beforehand to be very large
+	• https://stackoverflow.com/questions/16256913/improving-performance-of-very-large-dictionary-in-python
+- get rid of forward-backward multiplication pass
+	• multiply in backwards probability incrementally on backwards pass
+
+- possible others
+	• hybrid sampling through chart
+	• sampling through ls chart only, etc 

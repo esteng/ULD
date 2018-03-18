@@ -1,0 +1,24 @@
+experiments
+-----------
+- LibriSpeech
+    - per-speaker 
+    - g2p and phonetic alignment 
+
+tests
+-----
+quantitative
+------------
+- frame-level error rate /accuracy
+- cluster purity with MFA aligned data
+    • information theoretic measure for cluster purity etc. 
+    • look at alignment of top to bottom and bottom to top
+    • view both categories (top, bottom) as clusters of frames
+- autogenerate list that's like phone, top context + plu_bot + top context
+- segmentation accuracy
+    • how close are our phone boundaries (precision/recall)
+
+qualitative
+-----------
+- look at narrow alignment
+- look at phonological phenomenon that involves insertion/deletion vs pronunciation dictionary
+- allophony 
