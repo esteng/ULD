@@ -172,6 +172,27 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		self.post_update()
 
+		self.update_renorms()
+
+	def update_renorms(self):
+		# Calculate all the renormalized operation distributions (by previous bottom PLU)
+		# Don't allow same 2 bottom PLUs in a row
+		self.renorms = [[None for _ in range(self.n_units)] for __ in range(self.n_top_units+1)]
+		for i in range(self.n_top_units+1):
+			dist = self.op_latent_posteriors[i].grad_log_partition
+			for j in range(self.n_units):
+				renorm_dist = np.copy(dist)
+				if i == self.n_top_units:
+					# Special case for the last Dirichlet
+					renorm_dist = np.concatenate((np.array([float('-inf')]), renorm_dist, np.full(self.n_units,float('-inf'))))
+
+				# Set insert-bottom log-probability of previous phone to -inf (exp(-inf)=0)
+				renorm_dist[j+1] = float('-inf')
+				# Set substitute log-probability of previous phone to -inf (exp(-inf)=0)
+				renorm_dist[j+1+self.n_units] = float('-inf')
+
+				renorm_dist = renorm_dist - logsumexp(renorm_dist)
+				self.renorms[i][j] = renorm_dist
 
 	def post_update(self):
 		DiscreteLatentModel.post_update(self)
@@ -216,6 +237,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			log_units_stats[n_unit] = logsumexp(log_q_zn1_zn2)
 
 		return np.exp(log_units_stats)
+
 
 
 	def decode(self, data, plu_tops, state_path=False, phone_intervals=False, edit_ops=False):
@@ -426,6 +448,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		self.post_update()
 
+		self.update_renorms()
+
 
 	def forward_backward_noisy_channel(self, plu_tops, state_llh):
 
@@ -435,29 +459,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		n_frames = state_llh.shape[0]
 
 		frames_per_top = math.ceil(float(n_frames)/len(plu_tops))
-
-		# Calculate all the renormalized operation distributions (by previous bottom PLU)
-		# Don't allow same 2 bottom PLUs in a row
-		self.renorms = [[None for _ in range(self.n_units)] for __ in range(self.n_top_units+1)]
-		for i in range(self.n_top_units+1):
-			dist = self.op_latent_posteriors[i].grad_log_partition
-			for j in range(self.n_units):
-				renorm_dist = np.copy(dist)
-				if i == self.n_top_units:
-					# Special case for the last Dirichlet
-					renorm_dist = np.concatenate((np.array([float('-inf')]), renorm_dist, np.full(self.n_units,float('-inf'))))
-
-				# Set insert-bottom log-probability of previous phone to -inf (exp(-inf)=0)
-				renorm_dist[j+1] = float('-inf')
-				# Set substitute log-probability of previous phone to -inf (exp(-inf)=0)
-				renorm_dist[j+1+self.n_units] = float('-inf')
-
-				renorm_dist = renorm_dist - logsumexp(renorm_dist)
-				self.renorms[i][j] = renorm_dist
-
-		print("RENORMS DIMENSIONS")
-		print(len(self.renorms))
-		print(len(self.renorms[0]))
 
 		# Calculate forward probabilities
 		forward_probs = {}
