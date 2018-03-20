@@ -306,6 +306,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				best_prob = forward_probs[item][0]
 				best_item = item
 
+		print("BEST END ITEM:")
+		print(best_item)
+
 		(prob, back_pointer_tuple) = forward_probs[best_item]
 
 		back_path = [best_item]
@@ -314,6 +317,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		while back_pointer_tuple is not None:
 			back_path.append(back_pointer_tuple[0])
 			(prob, back_pointer_tuple) = forward_probs[back_path[-1]]
+			print("APPENDING")
+			print(prob, " ", back_pointer_tuple)
 
 		back_path.reverse()
 
@@ -468,6 +473,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		fw_ibs = 0
 
+		neg_inf = float('-inf')
+
 		log05 = math.log(0.5)
 
 		pb_upper_limit = len(plu_tops)-1 + max_slip
@@ -491,10 +498,15 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 								hmm_range = range(self.n_states)
 							for hmm_state in hmm_range:
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-								if curr_state in forward_probs:
+								if curr_state in forward_probs and forward_probs[curr_state] > neg_inf:
 									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip, frames_per_top, log05)
 									for (next_state, prob) in nexts:
+										# (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
 										if next_state in forward_probs:
+											#if plu_bottom_type == next_state[2] and (next_state[4] in [Ops.IB, Ops.SUB]):
+												#print("adding transition to same state")
+												#print("yikes")
+												#print(next_state, prob)
 											forward_probs[next_state] = np.logaddexp(forward_probs[next_state], prob)
 										else:
 											forward_probs[next_state] = prob
@@ -687,6 +699,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	# in the form ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
 	# and returns a list containing tuples of the form (next_state, log_prob)
 	def next_states(self, current_state, plu_tops, state_llh, max_slip, frames_per_top, log05):
+		# print('current_state')
+		# print(current_state)
 		((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p) = current_state
 
 		if plu_bottom_index == -1:
@@ -697,8 +711,13 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			log_prob_all_ops = self.renorms[plu_tops[plu_top_index+1]][plu_bottom_type]
 
 		log_prob_it = log_prob_all_ops[0]
-		log_prob_ib = log_prob_all_ops[0:self.n_units]
-		log_prob_sub = log_prob_all_ops[self.n_units:]
+		log_prob_ib = log_prob_all_ops[1:self.n_units+1]
+		log_prob_sub = log_prob_all_ops[self.n_units+1:]
+
+		# print('log_prob_ib')
+		# print(log_prob_ib)
+		# print('log_prob_sub')
+		# print(log_prob_sub)
 
 		n_frames = state_llh.shape[0]
 
@@ -729,6 +748,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			next_states.append(((frame_index+1, hmm_state+1, plu_bottom_type, plu_bottom_index, Ops.NONE, plu_top_index), \
 				(p + state_llh[frame_index+1,(plu_bottom_type*self.n_states+hmm_state+1)] + log05)))
 
+		#print([x for x in next_states if x[1] == float('-inf')])
 		return next_states
 
 	# Takes as input a tuple representing the current state
@@ -742,8 +762,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		log_prob_all_ops = self.renorms[plu_tops[plu_top_index-1]][plu_bottom_type-1]
 
 		log_prob_it = log_prob_all_ops[0]
-		log_prob_ib = log_prob_all_ops[0:self.n_units]
-		log_prob_sub = log_prob_all_ops[self.n_units:]
+		log_prob_ib = log_prob_all_ops[1:self.n_units+1]
+		log_prob_sub = log_prob_all_ops[self.n_units+1:]
 
 		prev_states = []
 
