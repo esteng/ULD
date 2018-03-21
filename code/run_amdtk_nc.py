@@ -16,7 +16,8 @@ import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 DEBUG = False
-resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
+# resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
+resume=None
 import amdtk
 import subprocess
 
@@ -158,7 +159,7 @@ optimizer = amdtk.NoisyChannelOptimizer(
     args= {'epochs': 1,
      'batch_size': 10,
      'lrate': 0.01,
-     'pkl_path': "pkl_test/",
+     'pkl_path': "models/",
      'log_dir': 'logs'},
     model=model,
 

@@ -182,6 +182,7 @@ class StochasticVBOptimizer(Optimizer):
 
         return (scale * exp_llh - kl_div) / self.data_stats['count']
 
+
 class NoisyChannelOptimizer(Optimizer):
 
 	def __init__(self, dview, data_stats, args, model):
@@ -208,8 +209,6 @@ class NoisyChannelOptimizer(Optimizer):
 		n_frames = 0
 
 		for arg in args_list:
-			print("arg:")
-			print(arg)
 			(fea_file, top_file) = arg
 
 			# Mean / Variance normalization.
@@ -246,9 +245,6 @@ class NoisyChannelOptimizer(Optimizer):
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
 		                                fea_list)
-		# stats_list = []
-		# for pair in fea_list:
-		# 	stats_list.append(self.e_step_nonstatic(pair))
 
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
@@ -274,12 +270,14 @@ class NoisyChannelOptimizer(Optimizer):
 	def e_step(args_list):
 		import os
 		from amdtk import read_htk
+		import numpy as np
 
 		# if model==None:
 		# 	model = self.model
 
 		# if data_stats==None:
 		# 	data_stats = self.data_stats
+
 
 		exp_llh = 0.
 		acc_stats = None
@@ -290,6 +288,7 @@ class NoisyChannelOptimizer(Optimizer):
 			# Mean / Variance normalization.
 			data = read_htk(fea_file)
 			data -= data_stats['mean']
+
 			data /= numpy.sqrt(data_stats['var'])
 			# Read top PLU sequence from file
 			with open(top_file, 'r') as f:
@@ -301,7 +300,9 @@ class NoisyChannelOptimizer(Optimizer):
 			s_stats = model.get_sufficient_stats(data)
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
 															 accumulate=True)
+
 			exp_llh += numpy.sum(llh)
+
 			n_frames += len(data)
 			if acc_stats is None:
 				acc_stats = new_acc_stats
