@@ -1,0 +1,8 @@
+ipcluster stop;
+cd amdtk;
+python setup.py install;
+cd ..;
+echo "RUNNING";
+python run_amdtk_nc.py | sed "s,\x1[Bb]\[[0-9;]*[a-zA-Z],,g" > debug.txt;
+echo "DONE";
+ipcluster stop;

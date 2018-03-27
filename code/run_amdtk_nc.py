@@ -15,7 +15,7 @@ import _pickle as pickle
 import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
-DEBUG = False
+DEBUG = True
 # resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
 resume=None
 import amdtk
@@ -70,7 +70,7 @@ print('Connected to', len(dview), 'jobs.')
 
 
 print("done importing!")
-audio_dir = '../audio/icicles'
+audio_dir = '../audio/TRAIN'
 
 audio_dir = os.path.abspath(audio_dir)
 
@@ -157,7 +157,7 @@ optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
     args= {'epochs': 1,
-     'batch_size': 10,
+     'batch_size': 4,
      'lrate': 0.01,
      'pkl_path': "pkl_test/",
      'log_dir': 'logs'},
