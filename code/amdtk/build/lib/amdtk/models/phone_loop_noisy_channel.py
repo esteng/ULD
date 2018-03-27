@@ -256,8 +256,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			forward_probs[item] = (prob, None)
 
 		for plu_bottom_index in range(-1,max_plu_bottom_index):
-			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
-			print("len(forward_probs) = "+str(len(forward_probs)))
+			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
+			# print("len(forward_probs) = "+str(len(forward_probs)))
 			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
 			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
 			for plu_top_index in range(pt_lower_limit, pt_upper_limit):
@@ -372,29 +372,36 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return retval
 
 	# @profile(immediate=True)
-	def get_posteriors(self, s_stats, top_seq, accumulate=False):
-
+	def get_posteriors(self, s_stats, top_seq, accumulate=False,filename=None):
+		import time
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
-		print("state_llh:")
-		print(state_llh.shape)
-		print(logsumexp(state_llh, axis=1))
-		print(state_llh)
+		# print("state_llh at {}:".format(time.clock()))
+		# print(state_llh.shape)
+		# print(logsumexp(state_llh, axis=1))
+		# print(state_llh)
 
 		# The workhorse
-
-		log_op_counts, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh)
-
+		
+		log_op_counts, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh, filename)
+		# get last column of log state counts, which is the normalizer (i.e. P(X_{1:T})), prob of whole frame sequence
+		log_prob_observations = logsumexp(log_state_counts[:,-1])
+		# normalize everything else by prob_obs to get expected count
+		print("got posteriors for file {} ".format(filename.strip()))
+		print("log_op_counts: ", log_op_counts)
+		print("log state counts: ", log_state_counts)
 		# Compute the posteriors
 
-		# Do we actually need to normalize
-		op_counts_normalized = []
-		for i in range(len(log_op_counts)):
-			op_counts_normalized.append(np.exp(log_op_counts[i] - logsumexp(log_op_counts[i])))
-
+		# # Do we actually need to normalize
+		# op_counts_normalized = []
+		# for i in range(len(log_op_counts)):
+		# 	print("log_op_counts shape ", log_op_counts[i].shape)
+		# 	op_counts_normalized.append(np.exp(log_op_counts[i] - log_prob_observations))
+		# quick hacky fix to not re-re-normalize op counts
+		op_counts_normalized = [log_op_counts[i] for i in range(len(log_op_counts))]
 		# Normalize by frame
 		state_norm = logsumexp(log_state_counts, axis=0)
-		state_counts_perframe_normalized = np.exp(log_state_counts - state_norm)
+		state_counts_perframe_normalized = np.exp((log_state_counts - state_norm))
 		# ^ this is equivalent to state_resps in the normal phone loop
 
 		if accumulate:
@@ -406,14 +413,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			state_stats = tot_resps.sum(axis=2)
 			gauss_stats = gauss_resps.dot(s_stats)
 			efdstats = [state_stats, gauss_stats]
-			efdstats.extend(op_counts_normalized)
+			# efdstats.extend(op_counts_normalized)
+			efdstats.extend(log_op_counts)
 			acc_stats = EFDStats(efdstats)
-
-			print("log_op_counts")
-			print(log_op_counts)
-			
-			print("op_counts_normalized")
-			print(op_counts_normalized)
 
 			return state_counts_perframe_normalized, state_norm[-1], acc_stats
 
@@ -568,7 +570,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return log_ib_counts - lg_n_samples, log_it_counts- lg_n_samples, log_sub_counts - lg_n_samples, log_state_counts - lg_n_samples
 
 
-	def forward_backward_noisy_channel(self, plu_tops, state_llh):
+	def forward_backward_noisy_channel(self, plu_tops, state_llh, file):
 
 		n_frames = state_llh.shape[0]
 		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
@@ -592,8 +594,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		pb_upper_limit = len(plu_tops)-1 + max_slip
 		pb_lower_limit = -1
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
-			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
-			print("len(forward_probs) = "+str(len(forward_probs)))
+			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
+			# print("len(forward_probs) = "+str(len(forward_probs)))
 			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
 			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
 			for plu_top_index in range(pt_lower_limit,pt_upper_limit):
@@ -625,8 +627,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		# Calculate backward probabilities, and also sum forwards+backwards probabilities in the same pass
 		backward_probs = {}
+		fw_bw_probs = {}
 		# Insert ending items
-		for (item, prob) in self.generate_end_items(plu_tops, state_llh, max_slip):
+		end_items = self.generate_end_items(plu_tops, state_llh, max_slip)
+		for (item, prob) in end_items:
 			backward_probs[item] = prob
 
 		# Initialize data structures for expected counts of HMM states for each frame, and also expected counts of edit operations
@@ -637,11 +641,13 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		tot_subs = 0
 		tot_its = 0
 
+		log_fb_norm = np.log(0)
+
 		pb_upper_limit = len(plu_tops)-1 + max_slip
 		pb_lower_limit = -1
 		for plu_bottom_index in range(pb_upper_limit, pb_lower_limit-1, -1):
-			print("backward ** plu_bottom_index = "+str(plu_bottom_index))
-			print("len(backward_probs) = "+str(len(backward_probs)))
+			# print("backward ** plu_bottom_index = "+str(plu_bottom_index))
+			# print("len(backward_probs) = "+str(len(backward_probs)))
 			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
 			pt_upper_limit = min(len(plu_tops)-1, plu_bottom_index+max_slip)
 
@@ -674,97 +680,121 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 									# Sum forwards & backwards probabilities
 									if curr_state in forward_probs:
 										fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
-
-										# Update edit operation expected counts
+										# assert(fw_bw_prob != np.nan)
+										fw_bw_probs[curr_state] = fw_bw_prob
+										# now we need to normalize 
+										# need to get p(string)
+										# can do this by summing over all other item states in p(*item, string)
+										# log_fb_norm[frame_index] = np.logaddexp(log_fb_norm[frame_index], fw_bw_prob)
 										if edit_op == Ops.IB:
 											# Increase the count in the insert-bottom section of the distribution (add 1 to plu_bottom_type)
 											if plu_top_index == len(plu_tops)-1:
 												# Special case for last PLU
-												log_op_counts[-1][plu_bottom_type] = np.logaddexp(log_op_counts[-1][plu_bottom_type],fw_bw_prob)
+												log_op_counts[-1][plu_bottom_type] = np.logaddexp(log_op_counts[-1][plu_bottom_type],
+																								fw_bw_prob) 
+																						
 											else:
-												log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],fw_bw_prob)
+												log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],
+																														fw_bw_prob)
 											tot_ibs += 1
 										elif edit_op == Ops.IT:
 											# Increase the count in the insert-top section of the distribution (the first slot)
-											log_op_counts[plu_tops[plu_top_index]][0] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],fw_bw_prob)
+											log_op_counts[plu_tops[plu_top_index]][0] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],
+																								fw_bw_prob)
 											tot_its += 1
 										elif edit_op == Ops.SUB:
 											# Increase the count in the substitute section of the distribution (add 1+self.n_units to plu_bottom_type)
-											log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1],fw_bw_prob)
+											log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1],
+																																fw_bw_prob)
 											tot_subs += 1
 
 										# Update per-frame HMM expected counts
-										log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], fw_bw_prob)
+										log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 
+																															fw_bw_prob)
 
 
-		#print("fw_ibs="+str(fw_ibs)+", bw_ibs="+str(bw_ibs)+", tot_ibs="+str(tot_ibs)+", tot_its="+str(tot_its)+", tot_subs="+str(tot_subs))
+		print("asserting log_op_counts don't start as nan")
+		for i in range(len(log_op_counts)):
+			# see if these counts are nan 
+			assert(not np.any(np.isnan(log_op_counts[i])))
 
-		# Sum over forwards & backwards probabilities to get the expected counts
-		# We need expected counts of HMM states for each frame, and also expected counts of edit operations
-		# log_state_counts = np.ones((self.n_units*self.n_states, n_frames))
-		# log_ib_counts = np.ones(self.n_units)
-		# log_it_counts = np.ones(self.n_top_units)
-		# log_sub_counts = np.ones(self.n_units*self.n_top_units)
-		# for plu_bottom_index in range(-1,max_plu_bottom_index):
-		# 	print("together ** plu_bottom_index = "+str(plu_bottom_index))
-		# 	for plu_top_index in range(max(-1,plu_bottom_index-max_slip),min(len(plu_tops), plu_bottom_index+max_slip)):
-		# 		for plu_bottom_type in range(self.n_units):
-		# 			for edit_op in Ops:
-		# 				for hmm_state in range(self.n_states):
-		# 					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
-		# 					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-		# 					for frame_index in range(n_frames):
-		# 						curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
+		print("accumulate normalizer")
+		for (item, _) in end_items:
+			if item in fw_bw_probs.keys():
+				if np.any(np.isnan(fw_bw_probs[item])):
+					print("got a nan at ", item)
+					assert(2==1)
+				log_fb_norm = np.logaddexp(log_fb_norm, fw_bw_probs[item])
+		# make sure something got added
+		print('asserting log_fb_norm is greater than zero')
+		print("log fb norm is : ", log_fb_norm, " in file ", file.strip())
+		assert(log_fb_norm > np.log(0))
 
-		# 						if curr_state in forward_probs and curr_state in backward_probs:
-		# 							fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
-
-		# 							# Update edit operation expected counts
-		# 							if edit_op.value == Ops.IB.value:
-		# 								log_ib_counts[plu_bottom_type] = np.logaddexp(log_ib_counts[plu_bottom_type],fw_bw_prob)
-		# 							elif edit_op.value == Ops.IT.value:
-		# 								log_it_counts[plu_tops[plu_top_index]] = np.logaddexp(log_it_counts[plu_tops[plu_top_index]],fw_bw_prob)
-		# 							elif edit_op.value == Ops.SUB.value:
-		# 								log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]] = np.logaddexp(log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]],fw_bw_prob)
-
-		# 							# Update per-frame HMM expected counts
-		# 							log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], fw_bw_prob)
-
-		# i = 0
-		# for pair in forward_probs.items():
-		# 	if i>1000:
-		# 		break
-		# 	print(pair)
-		# 	i += 1
+		for i in range(len(log_op_counts)):
+			for j in range(len(log_op_counts[i])):
+				log_op_counts[i][j] -= log_fb_norm
 
 
-		# print("len(forward_probs)")
-		# print(len(forward_probs))
+			# now do a pass to normalize and add
 
-		# print("len(backward_probs)")
-		# print(len(backward_probs))
+		assert(not np.any(np.isnan(log_fb_norm)))
+		print("passed outside assertion")
 
-		# print("log_ib_counts")
-		# print(log_ib_counts)
 
-		# print("log_it_counts")
-		# print(log_it_counts)
+			# fw_ibs = 0
+			# neg_inf = float('-inf')
+			# log05 = math.log(0.5)
+			# # print("normalizing")
+			# pb_upper_limit = len(plu_tops)-1 + max_slip
+			# pb_lower_limit = -1
+			# for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
+			# 	pt_lower_limit = max(-1,plu_bottom_index-max_slip)
+			# 	pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
+			# 	for plu_top_index in range(pt_lower_limit,pt_upper_limit):
+			# 		for plu_bottom_type in range(self.n_units):
+			# 			frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
+			# 			frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+			# 			for frame_index in range(frame_lower_limit,frame_upper_limit):
+			# 				for edit_op in Ops.CODES:
+			# 					if edit_op == Ops.IT:
+			# 						hmm_range = [self.n_states-1]
+			# 					elif edit_op == Ops.IB or edit_op == Ops.SUB:
+			# 						hmm_range = [0]
+			# 					else:
+			# 						hmm_range = range(self.n_states)
+			# 					for hmm_state in hmm_range:
+			# 						curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
+			# 						if curr_state in fw_bw_probs:
+			# 							fw_bw_prob = fw_bw_probs[curr_state]
+			# 							# Update edit operation expected counts
+			# 							if edit_op == Ops.IB:
+			# 								# Increase the count in the insert-bottom section of the distribution (add 1 to plu_bottom_type)
+			# 								if plu_top_index == len(plu_tops)-1:
+			# 									# Special case for last PLU
+			# 									log_op_counts[-1][plu_bottom_type] = np.logaddexp(log_op_counts[-1][plu_bottom_type],
+			# 																					fw_bw_prob - log_fb_norm[frame_index]) 
+																						
+			# 								else:
+			# 									log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],
+			# 																											fw_bw_prob - log_fb_norm[frame_index])
+			# 								tot_ibs += 1
+			# 							elif edit_op == Ops.IT:
+			# 								# Increase the count in the insert-top section of the distribution (the first slot)
+			# 								log_op_counts[plu_tops[plu_top_index]][0] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],
+			# 																					fw_bw_prob - log_fb_norm[frame_index])
+			# 								tot_its += 1
+			# 							elif edit_op == Ops.SUB:
+			# 								# Increase the count in the substitute section of the distribution (add 1+self.n_units to plu_bottom_type)
+			# 								log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1],
+			# 																													fw_bw_prob - log_fb_norm[frame_index])
+			# 								tot_subs += 1
 
-		# print("log_sub_counts")
-		# print(log_sub_counts)
+			# 							# Update per-frame HMM expected counts
+			# 							log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 
+			# 																												fw_bw_prob-log_fb_norm[frame_index])
 
-		# print("log_state_counts")
-		# print(log_state_counts)
 
-		# print("writing files...")
-
-		# with open('f_probs.txt','w') as f:
-		# 	for item in forward_probs:
-		# 		f.write(','.join([str(x) for x in item])+','+str(forward_probs[item])+"\n")
-
-		# with open('b_probs.txt','w') as f:
-		# 	for item in backward_probs:
-		# 		f.write(','.join([str(x) for x in item])+','+str(backward_probs[item])+"\n")
+		
 
 		print("Frames: "+str(n_frames)+"   Pb types: "+str(self.n_units)+"   Pt types: "+str(max(plu_tops)+1)+"   Pt indices: "+str(len(plu_tops)))
 
