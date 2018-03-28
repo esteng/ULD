@@ -5,5 +5,5 @@ features to automatically discover phone-like units.
 
 """
 print("INSIDE INIT")
-from .inference import StochasticVBOptimizer, NoisyChannelOptimizer 
+from .inference import StochasticVBOptimizer, NoisyChannelOptimizer, ToyNoisyChannelOptimizer
 print("SUCCESSFUL IMPORT IN INIT")

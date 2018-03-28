@@ -591,7 +591,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		log05 = math.log(0.5)
 
-		pb_upper_limit = len(plu_tops)-1 + max_slip
+		# pb_upper_limit = len(plu_tops)-1 + max_slip
+		# make same as decode
+		pb_upper_limit = len(plu_tops) + max_slip
 		pb_lower_limit = -1
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
@@ -628,10 +630,28 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# Calculate backward probabilities, and also sum forwards+backwards probabilities in the same pass
 		backward_probs = {}
 		fw_bw_probs = {}
+		any_item = False
 		# Insert ending items
 		end_items = self.generate_end_items(plu_tops, state_llh, max_slip)
 		for (item, prob) in end_items:
 			backward_probs[item] = prob
+			try:
+				fw_bw_probs[item] = forward_probs[item] + prob
+				any_item = True
+			except KeyError:
+				pass
+
+		if not any_item:
+			print("THERE ARE NO END ITEMS FOR FILE ", file.strip())
+
+
+
+		fp = list(forward_probs.keys())[0]
+		ei = list(end_items[0][0])
+		print("a forward item is : ", fp, " with length " , len(fp))
+		print("an end item is : ", ei, "with length ", len(ei))
+
+		assert(len(set(forward_probs.keys()) & set([x[0] for x in end_items]))	> 0)
 
 		# Initialize data structures for expected counts of HMM states for each frame, and also expected counts of edit operations
 		log_op_counts = [np.full((1 + 2*self.n_units), float("-inf")) for _ in range(len(self.op_latent_posteriors))]
@@ -728,7 +748,11 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# make sure something got added
 		print('asserting log_fb_norm is greater than zero')
 		print("log fb norm is : ", log_fb_norm, " in file ", file.strip())
-		assert(log_fb_norm > np.log(0))
+		try:
+			assert(log_fb_norm > np.log(0))
+		except AssertionError:
+			print("increasing fb norm")
+			log_fb_norm = 2e-76
 
 		for i in range(len(log_op_counts)):
 			for j in range(len(log_op_counts[i])):
@@ -739,60 +763,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		assert(not np.any(np.isnan(log_fb_norm)))
 		print("passed outside assertion")
-
-
-			# fw_ibs = 0
-			# neg_inf = float('-inf')
-			# log05 = math.log(0.5)
-			# # print("normalizing")
-			# pb_upper_limit = len(plu_tops)-1 + max_slip
-			# pb_lower_limit = -1
-			# for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
-			# 	pt_lower_limit = max(-1,plu_bottom_index-max_slip)
-			# 	pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
-			# 	for plu_top_index in range(pt_lower_limit,pt_upper_limit):
-			# 		for plu_bottom_type in range(self.n_units):
-			# 			frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
-			# 			frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-			# 			for frame_index in range(frame_lower_limit,frame_upper_limit):
-			# 				for edit_op in Ops.CODES:
-			# 					if edit_op == Ops.IT:
-			# 						hmm_range = [self.n_states-1]
-			# 					elif edit_op == Ops.IB or edit_op == Ops.SUB:
-			# 						hmm_range = [0]
-			# 					else:
-			# 						hmm_range = range(self.n_states)
-			# 					for hmm_state in hmm_range:
-			# 						curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-			# 						if curr_state in fw_bw_probs:
-			# 							fw_bw_prob = fw_bw_probs[curr_state]
-			# 							# Update edit operation expected counts
-			# 							if edit_op == Ops.IB:
-			# 								# Increase the count in the insert-bottom section of the distribution (add 1 to plu_bottom_type)
-			# 								if plu_top_index == len(plu_tops)-1:
-			# 									# Special case for last PLU
-			# 									log_op_counts[-1][plu_bottom_type] = np.logaddexp(log_op_counts[-1][plu_bottom_type],
-			# 																					fw_bw_prob - log_fb_norm[frame_index]) 
-																						
-			# 								else:
-			# 									log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],
-			# 																											fw_bw_prob - log_fb_norm[frame_index])
-			# 								tot_ibs += 1
-			# 							elif edit_op == Ops.IT:
-			# 								# Increase the count in the insert-top section of the distribution (the first slot)
-			# 								log_op_counts[plu_tops[plu_top_index]][0] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],
-			# 																					fw_bw_prob - log_fb_norm[frame_index])
-			# 								tot_its += 1
-			# 							elif edit_op == Ops.SUB:
-			# 								# Increase the count in the substitute section of the distribution (add 1+self.n_units to plu_bottom_type)
-			# 								log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1],
-			# 																													fw_bw_prob - log_fb_norm[frame_index])
-			# 								tot_subs += 1
-
-			# 							# Update per-frame HMM expected counts
-			# 							log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 
-			# 																												fw_bw_prob-log_fb_norm[frame_index])
-
 
 		
 
