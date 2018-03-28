@@ -604,6 +604,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				for plu_bottom_type in range(self.n_units):
 					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
 					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+					# frame_lower_limit = -1
+					# frame_upper_limit = n_frames
+
 					for frame_index in range(frame_lower_limit,frame_upper_limit):
 						for edit_op in Ops.CODES:
 							if edit_op == Ops.IT:
@@ -651,7 +654,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		print("a forward item is : ", fp, " with length " , len(fp))
 		print("an end item is : ", ei, "with length ", len(ei))
 
-		assert(len(set(forward_probs.keys()) & set([x[0] for x in end_items]))	> 0)
+		# assert(len(set(forward_probs.keys()) & set([x[0] for x in end_items]))	> 0)
 
 		# Initialize data structures for expected counts of HMM states for each frame, and also expected counts of edit operations
 		log_op_counts = [np.full((1 + 2*self.n_units), float("-inf")) for _ in range(len(self.op_latent_posteriors))]
@@ -736,7 +739,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		print("asserting log_op_counts don't start as nan")
 		for i in range(len(log_op_counts)):
 			# see if these counts are nan 
-			assert(not np.any(np.isnan(log_op_counts[i])))
+			try:
+				assert(not np.any(np.isnan(log_op_counts[i])))
+			except AssertionError:
+				print("log op counts start as nan! for i = ", i)
+				print(log_op_counts[i])
+				sys.exit()
 
 		print("accumulate normalizer")
 		for (item, _) in end_items:

@@ -31,6 +31,8 @@ import time
 import numpy as np
 from ipyparallel.util import interactive
 import _pickle as pickle
+from amdtk import read_htk
+
 
 class Optimizer(metaclass=abc.ABCMeta):
 
@@ -262,6 +264,11 @@ class NoisyChannelOptimizer(Optimizer):
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
 		                                fea_list)
+
+		# Serial version
+		# stats_list = []
+		# for pair in fea_list:
+		# 	stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		with open(time.strftime("batch_%Y-%m-%d_%H:%M"), "w") as f1:
