@@ -4,6 +4,51 @@ import sys
 import os
 import textgrid as tg
 
+import sklearn.metrics
+
+# Computes performance at the task of locating segment boundaries,
+# given two input numpy arrays of phone labels per time step
+def segmentation_performance(y_true_phones, y_pred_phones):
+
+	y_true_boundaries = seq_to_one_hot(y_true_phones)
+	y_pred_boundaries = seq_to_one_hot(y_pred_phones)
+
+	print(type(y_pred_boundaries))
+	print(type(y_true_boundaries))
+
+	true_pos = np.dot(y_pred_boundaries, y_true_boundaries)
+	true_neg = np.dot(np.ones_like(y_pred_boundaries)-y_pred_boundaries, np.ones_like(y_true_boundaries)-y_true_boundaries)
+
+	false_pos = np.dot(np.ones_like(y_pred_boundaries)-y_pred_boundaries, y_true_boundaries)
+	false_neg = np.dot(y_pred_boundaries, np.ones_like(y_true_boundaries)-y_true_boundaries)
+
+	accuracy = (true_pos+true_neg)/len(y_pred_boundaries)
+	precision = true_pos/(true_pos+false_pos)
+	recall = true_pos/(true_pos+false_neg)
+
+	f1 = 2*(precision*recall)/(precision+recall)
+
+	return {'accuracy':accuracy, 
+			'recall':recall,
+			'precision':precision,
+			'f1':f1}
+
+
+def pred_to_true_clustering(y_true_phones, y_pred_phones):
+
+	return sklearn.metrics.v_measure_score(y_true_phones, y_pred_phones)
+
+# Converts frame-label sequence to a one-hot vector of boundary locations
+def seq_to_one_hot(sequence):
+
+	one_hot = np.zeros_like(sequence, dtype=float)
+
+	for i in range(1,len(sequence)):
+		if sequence[i] != sequence[i-1]:
+			one_hot[i] = 1
+
+	return one_hot
+
 
 def frame_scores(y_true_path, y_pred_path):
 	length, y_true_phones = read_tg(y_true_path)
@@ -25,7 +70,7 @@ def frame_scores(y_true_path, y_pred_path):
 	return (accuracy, recall, precision, f1)
 
 
-def seg_to_one_hot(tier, l):
+def tg_tier_to_one_hot(tier, l):
 	"""
 	take textgrid tier, convert to 1-hot vector by 10ms frames, 
 	where there's a 1 if there is a boundary in that 
