@@ -225,6 +225,7 @@ class PhoneLoop(DiscreteLatentModel):
 
         # Compute the posteriors.
         log_q_Z = (log_alphas + log_betas).T
+        print("q_z shape is: ", log_q_Z.shape)
         log_norm = logsumexp(log_q_Z, axis=0)
         state_resps = np.exp((log_q_Z - log_norm))
 

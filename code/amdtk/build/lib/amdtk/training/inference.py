@@ -43,7 +43,7 @@ class Optimizer(metaclass=abc.ABCMeta):
         if self.log_dir is not None:
         	self.log_file = self.log_dir  + "/" + time.strftime("opt_%Y-%m-%d_%H:%M.log")
 
-        print("log dir: ", self.log_dir, "log file", self.log_file)
+        # print("log dir: ", self.log_dir, "log file", self.log_file)
         self.model = model
         self.time_step = 0
         self.data_stats = data_stats
@@ -157,13 +157,17 @@ class StochasticVBOptimizer(Optimizer):
 
     def train(self, fea_list, epoch, time_step):
         # Propagate the model to all the remote clients.
+        print("TRAINING")
         self.dview.push({
             'model': self.model,
         })
+
         # Parallel accumulation of the sufficient statistics.
         stats_list = self.dview.map_sync(StochasticVBOptimizer.e_step,
                                          fea_list)
 
+        print("stats list:")
+        print(stats_list)
         # Accumulate the results from all the jobs.
         exp_llh = stats_list[0][0]
         acc_stats = stats_list[0][1]
@@ -173,13 +177,26 @@ class StochasticVBOptimizer(Optimizer):
             acc_stats += val2
             n_frames += val3
 
+        print("getting kl")
         kl_div = self.model.kl_div_posterior_prior()
-
+        print("kl div:")
+        print(kl_div)
         # Scale the statistics.
         scale = self.data_stats['count'] / n_frames
+        print("scaling by {}".format(scale))
         acc_stats *= scale
+        print("updating model with ")
+        print(acc_stats)
         self.model.natural_grad_update(acc_stats, self.lrate)
-
+        print("returning")
+        print("scale")
+        print(scale)
+        print("exp_llh")
+        print(exp_llh)
+        print("kl_div")
+        print(kl_div)
+        print("self.data_stats[count]")
+        print(self.data_stats['count'])
         return (scale * exp_llh - kl_div) / self.data_stats['count']
 
 
@@ -242,13 +259,24 @@ class NoisyChannelOptimizer(Optimizer):
 		self.dview.push({
 			'model': self.model,
 		})
+
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
 		                                fea_list)
 
+		import time
+		with open(time.strftime("batch_%Y-%m-%d_%H:%M"), "w") as f1:
+			f1.write(",".join([str(x).strip() for x in fea_list]))
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
+
+		print("accumulating states from a batch:")
+		print("exp_llh is ")
+		print(exp_llh)
+		print("acc-stats is ")
+		print(acc_stats)
+
 		n_frames = stats_list[0][2]
 		for val1, val2, val3 in stats_list[1:]:
 			exp_llh += val1
@@ -272,12 +300,6 @@ class NoisyChannelOptimizer(Optimizer):
 		from amdtk import read_htk
 		import numpy as np
 
-		# if model==None:
-		# 	model = self.model
-
-		# if data_stats==None:
-		# 	data_stats = self.data_stats
-
 
 		exp_llh = 0.
 		acc_stats = None
@@ -299,7 +321,7 @@ class NoisyChannelOptimizer(Optimizer):
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
-															 accumulate=True)
+															 accumulate=True, filename=fea_file)
 
 			exp_llh += numpy.sum(llh)
 
@@ -310,3 +332,81 @@ class NoisyChannelOptimizer(Optimizer):
 				acc_stats += new_acc_stats
 
 		return (exp_llh, acc_stats, n_frames)
+
+
+class ToyNoisyChannelOptimizer(Optimizer):
+
+    def __init__(self, dview, data_stats, args, model):
+        Optimizer.__init__(self, dview, data_stats, args, model)
+        self.lrate = float(args.get('lrate', 1))
+
+
+    def train(self, data_list, epoch, time_step):
+
+        # Propagate the model to all the remote clients.
+        self.dview.push({
+            'model': self.model,
+        })
+
+        # Parallel accumulation of the sufficient statistics.
+        stats_list = self.dview.map_sync(ToyNoisyChannelOptimizer.e_step,
+                                        data_list)
+
+        # Accumulate the results from all the jobs.
+        exp_llh = stats_list[0][0]
+        acc_stats = stats_list[0][1]
+
+        print("accumulating states from a batch:")
+        print("exp_llh is ")
+        print(exp_llh)
+        print("acc-stats is ")
+        for s in acc_stats._stats:
+            print(s)
+
+        n_frames = stats_list[0][2]
+        for val1, val2, val3 in stats_list[1:]:
+            exp_llh += val1
+            acc_stats += val2
+            n_frames += val3
+
+        kl_div = self.model.kl_div_posterior_prior()
+
+        # Scale the statistics.
+        scale = self.data_stats['count'] / n_frames
+        acc_stats *= scale
+        self.model.natural_grad_update(acc_stats, self.lrate)
+
+        return (scale * exp_llh - kl_div) / self.data_stats['count']
+
+    @staticmethod
+    @interactive
+    def e_step(args_list):
+        import os
+        from amdtk import read_htk
+
+
+
+        exp_llh = 0.
+        acc_stats = None
+        n_frames = 0
+
+        for data, tops in args_list:
+            
+            # Get the accumulated sufficient statistics for the
+            # given set of features.
+            s_stats = model.get_sufficient_stats(data)
+            posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
+                                                             accumulate=True, filename="test")
+
+            exp_llh += numpy.sum(llh)
+            n_frames += len(data)
+            if acc_stats is None:
+                acc_stats = new_acc_stats
+            else:
+                acc_stats += new_acc_stats
+
+        return (exp_llh, acc_stats, n_frames)
+
+
+
+
