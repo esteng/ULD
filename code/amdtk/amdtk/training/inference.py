@@ -201,6 +201,7 @@ class StochasticVBOptimizer(Optimizer):
         print(self.data_stats['count'])
         return (scale * exp_llh - kl_div) / self.data_stats['count']
 
+
 class NoisyChannelOptimizer(Optimizer):
 
 	def __init__(self, dview, data_stats, args, model):
@@ -260,6 +261,7 @@ class NoisyChannelOptimizer(Optimizer):
 		self.dview.push({
 			'model': self.model,
 		})
+
 
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
@@ -328,6 +330,7 @@ class NoisyChannelOptimizer(Optimizer):
 															 accumulate=True, filename=fea_file)
 
 			exp_llh += numpy.sum(llh)
+
 			n_frames += len(data)
 			if acc_stats is None:
 				acc_stats = new_acc_stats

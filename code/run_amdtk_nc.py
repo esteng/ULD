@@ -15,7 +15,9 @@ import _pickle as pickle
 import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
+
 DEBUG = True
+
 # resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
 resume=None
 import amdtk
@@ -58,9 +60,9 @@ def accumulate_stats(data_stats):
     }
     return data_stats
 
-print("starting engines")
-subprocess.Popen(['ipcluster', 'start',' --profile', 'default',' -n', '4', '--daemonize'])
-subprocess.Popen(['sleep', '10']).communicate()
+# print("starting engines")
+# subprocess.Popen(['ipcluster', 'start',' --profile', 'default',' -n', '4', '--daemonize'])
+# subprocess.Popen(['sleep', '10']).communicate()
 
 
 rc = Client(profile='default')
@@ -70,7 +72,7 @@ print('Connected to', len(dview), 'jobs.')
 
 
 print("done importing!")
-audio_dir = '../audio/timit-test'
+audio_dir = '../audio/FAEM0'
 
 audio_dir = os.path.abspath(audio_dir)
 
@@ -120,9 +122,6 @@ for top_path in top_paths:
 
 num_tops = max(tops)+1
 
-
-
-
 elbo = []
 time = []
 def callback(args):
@@ -159,7 +158,7 @@ optimizer = amdtk.NoisyChannelOptimizer(
     args= {'epochs': 3,
      'batch_size': 4,
      'lrate': 0.01,
-     'pkl_path': "pkl_test/",
+     'pkl_path': "models/",
      'log_dir': 'logs'},
     model=model,
 
