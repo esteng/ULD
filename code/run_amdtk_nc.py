@@ -15,11 +15,14 @@ import _pickle as pickle
 import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
-DEBUG = True
+DEBUG = False
 # resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
 resume=None
 import amdtk
 import subprocess
+
+
+np.seterr(divide='raise', over='raise', under='warn', invalid='raise')
 
 print("successfully completed imports")
 
@@ -58,8 +61,10 @@ def accumulate_stats(data_stats):
     }
     return data_stats
 
+njobs = 2
 
-subprocess.Popen(['ipcluster', 'start',' --profile', 'default',' -n', '4', '--daemonize'])
+
+subprocess.Popen(['ipcluster', 'start',' --profile', 'default',' -n', str(njobs), '--daemonize'])
 subprocess.Popen(['sleep', '10']).communicate()
 
 
@@ -70,7 +75,7 @@ print('Connected to', len(dview), 'jobs.')
 
 
 print("done importing!")
-audio_dir = '../audio/TRAIN'
+audio_dir = '../audio/mini-timit-1'
 
 audio_dir = os.path.abspath(audio_dir)
 
@@ -156,7 +161,7 @@ print("Creating VB optimizer...")
 optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
-    args= {'epochs': 1,
+    args= {'epochs': 10,
      'batch_size': 4,
      'lrate': 0.01,
      'pkl_path': "pkl_test/",

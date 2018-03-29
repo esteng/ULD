@@ -85,7 +85,10 @@ class Optimizer(metaclass=abc.ABCMeta):
 
                 # Reshaped the list of features.
                 fea_list = shuffled_data[start:end]
+                print("batch_size: ", batch_size)
+                print("len(self.dview): ", len(self.dview))
                 n_utts = batch_size // len(self.dview)
+                print("n_utts: ", n_utts)
                 new_fea_list = [fea_list[i:i + n_utts]  for i in
                                 range(0, len(fea_list), n_utts)]
                 # Update the model.
@@ -185,8 +188,10 @@ class StochasticVBOptimizer(Optimizer):
         print(kl_div)
         # Scale the statistics.
         scale = self.data_stats['count'] / n_frames
+        print('acc_stats[2] before scaling: ', acc_stats[2])
         print("scaling by {}".format(scale))
         acc_stats *= scale
+        print('acc_stats[2] after scaling: ', acc_stats[2])
         print("updating model with ")
         print(acc_stats)
         self.model.natural_grad_update(acc_stats, self.lrate)
@@ -243,7 +248,7 @@ class NoisyChannelOptimizer(Optimizer):
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True)
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename=fea_file)
 
 			exp_llh += np.sum(llh)
 			n_frames += len(data)
@@ -262,13 +267,13 @@ class NoisyChannelOptimizer(Optimizer):
 		})
 
 		# Parallel accumulation of the sufficient statistics.
-		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-		                                fea_list)
+		# stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
+		#                                 fea_list)
 
 		# Serial version
-		# stats_list = []
-		# for pair in fea_list:
-		# 	stats_list.append(self.e_step_nonstatic(pair))
+		stats_list = []
+		for pair in fea_list:
+			stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		with open(time.strftime("batch_%Y-%m-%d_%H:%M"), "w") as f1:
