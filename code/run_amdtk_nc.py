@@ -16,14 +16,14 @@ import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 # DEBUG = True
-DEBUG = False
+DEBUG = True
 # resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
 resume=None
 import amdtk
 import subprocess
 
 
-np.seterr(divide='raise', over='raise', under='raise', invalid='raise')
+np.seterr(divide='raise', over='warn', under='warn', invalid='raise')
 
 print("successfully completed imports")
 
@@ -75,7 +75,7 @@ print('Connected to', len(dview), 'jobs.')
 
 
 print("done importing!")
-audio_dir = '../audio/mini-timit-1'
+audio_dir = '../audio/FAEM0'
 # audio_dir = '../audio/FAEM0'
 
 audio_dir = os.path.abspath(audio_dir)
