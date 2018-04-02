@@ -97,12 +97,12 @@ class Optimizer(metaclass=abc.ABCMeta):
 					self.train(new_fea_list, epoch + 1, self.time_step)
 
 				# pickle model
-		 #        if self.pkl_path is not None:
-		 # #        	if not os.path.exists(self.pkl_path):
-						# # os.makedirs(self.pkl_path)
-		 # #            path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
-		 #            # with open(path_to_file, "wb") as f1:
-		 #            #     pickle.dump(self.model, f1)
+				if self.pkl_path is not None:
+					if not os.path.exists(self.pkl_path):
+						os.makedirs(self.pkl_path)
+					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
+					with open(path_to_file, "wb") as f1:
+						pickle.dump(self.model, f1)
 
 
 				# write to log
@@ -174,8 +174,6 @@ class StochasticVBOptimizer(Optimizer):
 		stats_list = self.dview.map_sync(StochasticVBOptimizer.e_step,
 										 fea_list)
 
-		print("stats list:")
-		print(stats_list)
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
@@ -406,10 +404,6 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
 
-		print("accumulating states from a batch:")
-		print("exp_llh is ")
-		print(exp_llh)
-		print("acc-stats is ")
 		for s in acc_stats._stats:
 			print(s)
 
@@ -419,11 +413,21 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			acc_stats += val2
 			n_frames += val3
 
+		with open('logfile', 'a') as f:
+			f.write('=====================\n')
+			f.write('train\n')
+			f.write('accumulated op_counts_normalized: '+str(acc_stats[2:])+'\n')
+
 		kl_div = self.model.kl_div_posterior_prior()
 
 		# Scale the statistics.
 		scale = self.data_stats['count'] / n_frames
 		acc_stats *= scale
+
+		with open('logfile', 'a') as f:
+			f.write('scale:'+str(scale)+'\n')
+			f.write('scaled op_counts_normalized: '+str(acc_stats[2:])+'\n')
+
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
 		return (scale * exp_llh - kl_div) / self.data_stats['count']
@@ -440,10 +444,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		acc_stats = None
 		n_frames = 0
 
-		for data_top_pair in [args_list]:
-
-			print(data_top_pair)
-			data, tops = data_top_pair
+		for data, tops in [args_list]:
 			
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
