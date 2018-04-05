@@ -750,7 +750,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 										# log_fb_norm[frame_index] = np.logaddexp(log_fb_norm[frame_index], fw_bw_prob)
 										if edit_op == Ops.IB:
 											# Increase the count in the insert-bottom section of the distribution (add 1 to plu_bottom_type)
-											log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],
+											idxx = plu_tops[plu_top_index+1]
+											dist = log_op_counts[idxx]
+											dist[plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],
 																														fw_bw_prob)
 											tot_ibs += 1
 										elif edit_op == Ops.IT:
@@ -951,7 +953,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		next_states = []
 
 		# Insert bottom op (for all possible bottom PLUs)
-		if (hmm_state == self.n_states-1) and (plu_bottom_index < len(plu_tops)-1) and (frame_index < n_frames-1) and (plu_bottom_index-plu_top_index < max_slip):
+		if (hmm_state == self.n_states-1) and (plu_top_index < len(plu_tops)-1) and (frame_index < n_frames-1) and (plu_bottom_index-plu_top_index < max_slip):
 			next_states.extend([((frame_index+1, 0, pb, plu_bottom_index+1, Ops.IB, plu_top_index), \
 				(p + state_llh[frame_index+1,(pb*self.n_states)] + log_prob_ib[pb] + log05)) for pb in range(self.n_units)])
 			if logging:
