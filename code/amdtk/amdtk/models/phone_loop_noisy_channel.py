@@ -750,9 +750,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 										# log_fb_norm[frame_index] = np.logaddexp(log_fb_norm[frame_index], fw_bw_prob)
 										if edit_op == Ops.IB:
 											# Increase the count in the insert-bottom section of the distribution (add 1 to plu_bottom_type)
-											idxx = plu_tops[plu_top_index+1]
-											dist = log_op_counts[idxx]
-											dist[plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],
+											log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1],
 																														fw_bw_prob)
 											tot_ibs += 1
 										elif edit_op == Ops.IT:
