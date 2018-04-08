@@ -413,10 +413,10 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			acc_stats += val2
 			n_frames += val3
 
-		with open('logfile', 'a') as f:
-			f.write('=====================\n')
-			f.write('train\n')
-			f.write('accumulated op_counts_normalized: '+str(acc_stats[2:])+'\n')
+		# with open('logfile', 'a') as f:
+		# 	f.write('=====================\n')
+		# 	f.write('train\n')
+		# 	f.write('accumulated op_counts_normalized: '+str(acc_stats[2:])+'\n')
 
 		kl_div = self.model.kl_div_posterior_prior()
 
@@ -424,9 +424,9 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		scale = self.data_stats['count'] / n_frames
 		acc_stats *= scale
 
-		with open('logfile', 'a') as f:
-			f.write('scale:'+str(scale)+'\n')
-			f.write('scaled op_counts_normalized: '+str(acc_stats[2:])+'\n')
+		# with open('logfile', 'a') as f:
+		# 	f.write('scale:'+str(scale)+'\n')
+		# 	f.write('scaled op_counts_normalized: '+str(acc_stats[2:])+'\n')
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
