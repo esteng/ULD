@@ -51,15 +51,15 @@ class Optimizer(metaclass=abc.ABCMeta):
 		self.time_step = 0
 		self.data_stats = data_stats
 
-		with self.dview.sync_imports():
-			import numpy
-			from amdtk import read_htk
-			import _pickle as pickle
-			import os
+		# with self.dview.sync_imports():
+		# 	import numpy
+		# 	from amdtk import read_htk
+		# 	import _pickle as pickle
+		# 	import os
 
-		self.dview.push({
-			'data_stats': data_stats
-		})
+		# self.dview.push({
+		# 	'data_stats': data_stats
+		# })
 
 	def run(self, data, callback):
 		import _pickle as pickle
@@ -264,9 +264,9 @@ class NoisyChannelOptimizer(Optimizer):
 	def train(self, fea_list, epoch, time_step):
 
 		# Propagate the model to all the remote clients.
-		self.dview.push({
-			'model': self.model,
-		})
+		# self.dview.push({
+		# 	'model': self.model,
+		# })
 
 
 		# Parallel accumulation of the sufficient statistics.
@@ -279,11 +279,12 @@ class NoisyChannelOptimizer(Optimizer):
 			stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
-		with open(time.strftime("batch_%Y-%m-%d_%H:%M"), "w") as f1:
-			f1.write(",".join([str(x).strip() for x in fea_list]))
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
+
+
+			
 
 		print("accumulating states from a batch:")
 		print("exp_llh is ")
@@ -298,6 +299,7 @@ class NoisyChannelOptimizer(Optimizer):
 			n_frames += val3
 
 		kl_div = self.model.kl_div_posterior_prior()
+
 
 		# Scale the statistics.
 		scale = self.data_stats['count'] / n_frames
@@ -353,6 +355,42 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		self.lrate = float(args.get('lrate', 1))
 		self.dir_path = dir_path
 
+	def e_step_nonstatic(self, args_list):
+
+		print(type(self))
+
+		model = self.model
+		data_stats = self.data_stats
+
+		exp_llh = 0.
+		acc_stats = None
+		n_frames = 0
+
+		for arg in args_list:
+			print("GOT ARG")
+			print("arg is : ", str(arg))
+			(data, tops) = arg
+
+			# Mean / Variance normalization.
+			data -= data_stats['mean']
+			data /= np.sqrt(data_stats['var'])
+
+
+			# Get the accumulated sufficient statistics for the
+			# given set of features.
+			s_stats = model.get_sufficient_stats(data)
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
+
+			exp_llh += np.sum(llh)
+			n_frames += len(data)
+			if acc_stats is None:
+				acc_stats = new_acc_stats
+			else:
+				acc_stats += new_acc_stats
+
+		return (exp_llh, acc_stats, n_frames) 
+
+
 	def run(self, data, callback):
 		"""Run the Standard Variational Bayes training.
 
@@ -392,13 +430,19 @@ class ToyNoisyChannelOptimizer(Optimizer):
 	def train(self, data_list, epoch, time_step):
 
 		# Propagate the model to all the remote clients.
-		self.dview.push({
-			'model': self.model,
-		})
+		# self.dview.push({
+		# 	'model': self.model,
+		# })
 
 		# Parallel accumulation of the sufficient statistics.
-		stats_list = self.dview.map_sync(ToyNoisyChannelOptimizer.e_step,
-										data_list)
+		# stats_list = self.dview.map_sync(ToyNoisyChannelOptimizer.e_step,
+		# 								data_list)
+
+
+		# Serial version
+		stats_list = []
+		# for pair in data_list:
+		stats_list.append(self.e_step_nonstatic(data_list))
 
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
@@ -427,6 +471,17 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		# with open('logfile', 'a') as f:
 		# 	f.write('scale:'+str(scale)+'\n')
 		# 	f.write('scaled op_counts_normalized: '+str(acc_stats[2:])+'\n')
+
+		
+		with open("logfile", "a") as f1:
+			f1.write("exp_llh: ")
+			f1.write(str(exp_llh))
+			f1.write("kl_div: ")
+			f1.write(str(kl_div))
+
+			f1.write("datastats[count]: ")
+			f1.write(str(self.data_stats["count"]))
+
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
