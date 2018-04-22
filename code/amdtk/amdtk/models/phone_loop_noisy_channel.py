@@ -25,6 +25,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 import numpy as np
+import sys
 from bisect import bisect
 from itertools import groupby
 from scipy.special import logsumexp
@@ -173,7 +174,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		for i in range(self.n_top_units):
 			dist = self.op_latent_posteriors[i].grad_log_partition
-			print(dist)
+			# print(dist)
 			for j in range(self.n_units):
 				renorm_dist = np.copy(dist)
 				# Set insert-bottom log-probability of previous phone to -inf (exp(-inf)=0)
@@ -213,24 +214,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			state_llh.T[:, np.newaxis, :])
 
 		return state_llh, c_given_s_resps
-
-
-	def units_stats(self, c_llhs, log_alphas, log_betas):
-		log_units_stats = np.zeros(self.n_units)
-		norm = logsumexp(log_alphas[-1] + log_betas[-1])
-		log_A = np.log(self.trans_mat.toarray())
-
-		for n_unit in range(self.n_units):
-			index1 = n_unit * self.n_states + 1
-			index2 = index1 + 1
-			log_prob_trans = log_A[index1, index2]
-			log_q_zn1_zn2 = log_alphas[:-1, index1] + c_llhs[1:, index2] + \
-				log_prob_trans + log_betas[1:, index2]
-			log_q_zn1_zn2 -= norm
-			log_units_stats[n_unit] = logsumexp(log_q_zn1_zn2)
-
-		return np.exp(log_units_stats)
-
 
 
 	def decode(self, data, plu_tops, state_path=False, phone_intervals=False, edit_ops=False, hmm_states=False, plus=True):
@@ -300,8 +283,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				best_prob = forward_probs[item][0]
 				best_item = item
 
-		print("BEST END ITEM:")
-		print(best_item)
+		# print("BEST END ITEM:")
+		# print(best_item)
 
 		back_path = [best_item]
 
@@ -389,8 +372,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		import time
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
-		print("state_llh at {}:".format(time.clock()))
-		print(state_llh.shape)
+		# print("state_llh at {}:".format(time.clock()))
+		# print(state_llh.shape)
 		# print(logsumexp(state_llh, axis=1))
 		# print(state_llh)
 
@@ -400,7 +383,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# # get last column of log state counts, which is the normalizer (i.e. P(X_{1:T})), prob of whole frame sequence
 		# log_prob_observations = logsumexp(log_state_counts[:,-1])
 
-		print("got posteriors for file {} ".format(filename.strip()))
+		# print("got posteriors for file {} ".format(filename.strip()))
 
 		# Normalize by frame
 		state_norm = logsumexp(log_state_counts, axis=0)
@@ -454,7 +437,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 			acc_stats = EFDStats(efdstats)
 
-			print("acc op stats: ", acc_stats._stats[-1])
+			# print("acc op stats: ", acc_stats._stats[-1])
 
 			return state_counts_perframe_normalized, state_norm[-1], acc_stats
 
@@ -468,24 +451,23 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		op_counts = acc_stats[2:]
 
 		# Update edit op counts for each top PLU
-
-		with open('logfile', 'a') as f:
-			f.write('=====================\n')
-			f.write('natural_grad_update\n')
-			f.write('op_latent_posteriors natural params:\n')
-
-			for i in range(len(op_counts)):
-				op_count_i = op_counts[i]
+		for i in range(len(op_counts)):
+			op_count_i = op_counts[i]
+			try:
 				assert(np.all(np.isfinite(op_count_i)))
-				f.write('======'+str(i)+'======\n')
-				f.write('before update natural_params: '+str(self.op_latent_posteriors[i].natural_params)+'\n')
-				f.write('before update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition)+'\n')
-				f.write('op_count_i: '+str(op_count_i)+'\n')
-				op_grad = self.op_latent_priors[i].natural_params + op_count_i
-				op_grad = op_grad - self.op_latent_posteriors[i].natural_params
-				self.op_latent_posteriors[i].natural_params += lrate * op_grad
-				f.write('after update natural_params: '+str(self.op_latent_posteriors[i].natural_params)+'\n')
-				f.write('after update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition)+'\n')
+			except AssertionError:
+				print("failure")
+				print(op_count_i)
+				sys.exit()
+			# print('======'+str(i)+'======\n')
+			print('before update natural_params: '+str(self.op_latent_posteriors[i].natural_params))
+			print('before update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition))
+			# print('op_count_i: '+str(op_count_i))
+			op_grad = self.op_latent_priors[i].natural_params + op_count_i
+			op_grad = op_grad - self.op_latent_posteriors[i].natural_params
+			self.op_latent_posteriors[i].natural_params += lrate * op_grad
+			print('after update natural_params: '+str(self.op_latent_posteriors[i].natural_params))
+			print('after update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition))
 
 		# Update the states' weights.
 		for idx, post in enumerate(self.state_posteriors):
@@ -505,123 +487,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.update_renorms()
 
 
-	def forward_backward_sample(self, plu_tops, state_llh, n_samples):
-		print("RUNNING FORWARD BACKWARD \n\n\n STARTS HERE")
-		import sys
-		n_frames = state_llh.shape[0]
-		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
-		max_plu_bottom_index = len(plu_tops) + max_slip
-
-		n_frames = state_llh.shape[0]
-
-		frames_per_top = n_frames/len(plu_tops)
-
-		# Calculate forward probabilities
-		forward_probs = {}
-		# Insert starting items
-		start_items = self.generate_start_items(plu_tops, state_llh)
-		for (item, prob) in start_items:
-			forward_probs[item] = prob
-
-
-		fw_ibs = 0
-
-		pb_upper_limit = len(plu_tops)-1 + max_slip
-		pb_lower_limit = -1
-		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
-			print("forward ** plu_bottom_index = "+str(plu_bottom_index))
-			print("len(forward_probs) = "+str(len(forward_probs)))
-			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
-			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
-			for plu_top_index in range(pt_lower_limit,pt_upper_limit):
-				for plu_bottom_type in range(self.n_units):
-					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
-					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-					for frame_index in range(frame_lower_limit,frame_upper_limit):
-						for edit_op in Ops.CODES:
-							if edit_op == Ops.IT:
-								hmm_range = [self.n_states-1]
-							elif edit_op == Ops.IB or edit_op == Ops.SUB:
-								hmm_range = [0]
-							else:
-								hmm_range = range(self.n_states)
-							for hmm_state in hmm_range:
-								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-								if curr_state in forward_probs:
-									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip, frames_per_top)
-									
-									for next_state_and_prob in nexts:
-										(next_state, prob) = next_state_and_prob
-										if next_state in forward_probs:
-											forward_probs[next_state] = np.logaddexp(forward_probs[next_state], prob)
-										else:
-											forward_probs[next_state] = prob
-			
-		# sample backwards probs
-		# when we renormalize the chart, what are we summing across? 
-		# need to pick a transition
-		# so we should sum across all variables that aren't included in the transition? 
-		forward_sum  = logsumexp(list(forward_probs.values()))
-
-
-		log_state_counts = np.full((self.n_units*self.n_states, n_frames), float("-inf"))
-		log_ib_counts = np.full(self.n_units, float("-inf"))
-		log_it_counts = np.full(self.n_top_units, float("-inf"))
-		log_sub_counts = np.full(self.n_units*self.n_top_units, float("-inf"))
-
-		tot_ibs = 0
-		tot_subs = 0
-		tot_its = 0
-
-		pb_upper_limit = len(plu_tops)-1 + max_slip
-		pb_lower_limit = -1
-
-		
-		for s in range(n_samples):
-			# choose an start item 
-			items, item_probs = zip(*start_items)
-			item_probs -= forward_sum
-			item_idx = np.random.choice(np.arange(0,len(items)), p = np.exp(item_probs))
-
-			item = items[item_idx]
-			nexts = self.next_states((item, forward_probs[item]), plu_tops, state_llh, max_slip, frames_per_top)
-
-			while len(nexts) > 0:
-				next_states, next_probs = zip(*nexts)
-				
-				if len(next_probs) > 1:
-					# choose one previous state
-					next_probs -= forward_sum
-					state_idx = np.random.choice(np.arange(0,len(next_states)), p=np.exp(next_probs))
-				else:
-					state_idx = 0
-
-				new_state, prob = nexts[state_idx]
-				frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index = new_state
-				# Update edit operation expected counts
-				if edit_op == Ops.IB:
-					log_ib_counts[plu_bottom_type] = np.logaddexp(log_ib_counts[plu_bottom_type],0.0)
-					tot_ibs += 1
-				elif edit_op == Ops.IT:
-					log_it_counts[plu_tops[plu_top_index]] = np.logaddexp(log_it_counts[plu_tops[plu_top_index]],0.0)
-					tot_its += 1
-				elif edit_op == Ops.SUB:
-					log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]] =\
-					 		np.logaddexp(log_sub_counts[plu_bottom_type*self.n_top_units+plu_tops[plu_top_index]],0.0)
-					tot_subs += 1
-				# Update per-frame HMM expected counts
-				log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] =\
-				 			np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 0.0)
-				
-				nexts = self.next_states((next_state, forward_probs[next_state]), plu_tops, state_llh, max_slip, frames_per_top)
-
-		# print(log_ib_counts, log_it_counts, log_sub_counts, log_state_counts)
-		print("totals: ", tot_ibs, tot_subs, tot_its)
-		lg_n_samples = np.log(n_samples)
-		print(log_ib_counts - lg_n_samples, log_it_counts- lg_n_samples, log_sub_counts - lg_n_samples, log_state_counts - lg_n_samples)
-		return log_ib_counts - lg_n_samples, log_it_counts- lg_n_samples, log_sub_counts - lg_n_samples, log_state_counts - lg_n_samples
-
-
 	def forward_backward_noisy_channel(self, plu_tops, state_llh, file):
 
 		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
@@ -630,15 +495,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		frames_per_top = math.ceil(float(n_frames)/len(plu_tops))
 
-		# with open('logfile', 'a') as f:
-		# 	f.write('=====================\n')
-		# 	f.write('forward_backward_noisy_channel\n')
-		# 	f.write('state_llh.shape: '+str(state_llh.shape)+'\n')
-		# 	f.write('max_slip: '+str(max_slip)+'\n')
-		# 	f.write('frames_per_top: '+str(frames_per_top)+'\n')
-
 		# Calculate forward probabilities
 		forward_probs = {}
+
+		
 		# Insert starting items
 		for (item, prob) in self.generate_start_items(plu_tops, state_llh):
 			forward_probs[item] = prob
@@ -656,17 +516,39 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		logging = False
 
 		pb_lower_limit = -1
+
+		# what if we do it as an np array? 
+		forward_arr = np.full((pb_upper_limit+1,len(plu_tops), self.n_units,n_frames, len(Ops.CODES), self.n_states), float('-inf'))
+		backward_arr = np.full((pb_upper_limit+1, len(plu_tops), self.n_units,n_frames, len(Ops.CODES), self.n_states), float('-inf'))
+		fw_pb_idxs = set()
+		fw_pt_idxs = set()
+		fw_pb_types = set()
+		fw_frame_idxs = set()
+		fw_edit_ops = set()
+		fw_hmm_states = set()
+
+		# try no pruning
+
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
+			fw_pb_idxs |= {plu_bottom_index}
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
 			# print("len(forward_probs) = "+str(len(forward_probs)))
 			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
-			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
-			for plu_top_index in range(pt_lower_limit,pt_upper_limit+1):
+			# pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
+			# pt_lower_limit = -1
+			pt_upper_limit = len(plu_tops)
+			for plu_top_index in range(pt_lower_limit,pt_upper_limit):
+				fw_pt_idxs |= {plu_top_index}
 				for plu_bottom_type in range(self.n_units):
+					fw_pb_types |= {plu_bottom_type}
 					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
 					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-					for frame_index in range(frame_lower_limit,frame_upper_limit+1):
+					# frame_lower_limit = -1
+					# frame_upper_limit = n_frames-1
+					for frame_index in range(frame_lower_limit,frame_upper_limit):
+						fw_frame_idxs |= {frame_index}
 						for edit_op in Ops.CODES:
+							fw_edit_ops |= {edit_op}
 							if edit_op == Ops.IT:
 								hmm_range = [self.n_states-1]
 							elif edit_op == Ops.IB or edit_op == Ops.SUB:
@@ -674,7 +556,21 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 							else:
 								hmm_range = range(self.n_states)
 							for hmm_state in hmm_range:
+								fw_hmm_states |= {hmm_state}
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
+								
+
+								# curr_forward =  forward_arr[np.array(curr_state)]
+								# print("curr shape")
+								# print(curr_forward.shape)
+								# if curr_forward > neg_inf:
+								# 	nexts = self.next_states((curr_state, curr_forward), plu_tops, state_llh, max_slip, frames_per_top, log05, logging)
+								# 	for (next_state, prob) in nexts:
+								# 		if forward_arr[list(next_state)] > neg_inf:
+								# 			forward_arr[list(next_state)] = np.logaddexp(forward_arr[list(next_state)], prob)
+								# 		else:
+								# 			forward_arr[list(next_state)] = prob
+
 								if curr_state in forward_probs and forward_probs[curr_state] > neg_inf:
 
 									logging = (np.random.ranf() < 0)
@@ -684,26 +580,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip, frames_per_top, log05, logging)
 									for (next_state, prob) in nexts:
-										# (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op.value, plu_top_index)
-
 										if next_state in forward_probs:
-											#if plu_bottom_type == next_state[2] and (next_state[4] in [Ops.IB, Ops.SUB]):
-												#print("adding transition to same state")
-												#print("yikes")
-												#print(next_state, prob)
-
-											# if logging:
-											# 	with open('logfile', 'a') as f:
-											# 		f.write('=====================\n')
-											# 		f.write('forward_probs[next_state]: '+str(forward_probs[next_state])+'\n')
-											# 		f.write('logaddexp with prob: '+str(prob)+'\n')
-											# 		f.write('new forward_probs[next_state]: '+str(np.logaddexp(forward_probs[next_state], prob))+'\n')
-
 											forward_probs[next_state] = np.logaddexp(forward_probs[next_state], prob)
 										else:
 											forward_probs[next_state] = prob
 
-		print("Number of frames:",n_frames)
+		# print("Number of frames:",n_frames)
 
 		if logging:
 			with open('rfile', 'a') as f:
@@ -713,6 +595,14 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# Calculate backward probabilities, and also sum forwards+backwards probabilities in the same pass
 		backward_probs = {}
 		fw_bw_probs = {}
+
+		bw_pb_idxs = set()
+		bw_pt_idxs = set()
+		bw_pb_types = set()
+		bw_frame_idxs = set()
+		bw_edit_ops = set()
+		bw_hmm_states = set()
+
 		# Insert ending items
 		end_items = self.generate_end_items(plu_tops, state_llh, max_slip)
 		for (item, prob) in end_items:
@@ -726,22 +616,32 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		tot_subs = 0
 		tot_its = 0
 
-		log_fb_norm = float('-inf')
-
 		pb_upper_limit = len(plu_tops)-1 + max_slip
 		pb_lower_limit = -1
 		for plu_bottom_index in range(pb_upper_limit, pb_lower_limit-1, -1):
+			bw_pb_idxs |= {plu_bottom_index}
 			# print("backward ** plu_bottom_index = "+str(plu_bottom_index))
 			# print("len(backward_probs) = "+str(len(backward_probs)))
 			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
-			pt_upper_limit = min(len(plu_tops)-1, plu_bottom_index+max_slip)
+			# pt_upper_limit = min(len(plu_tops)-1, plu_bottom_index+max_slip)
+			# pt_lower_limit = -1
+			# used to be pt_upper_limit = min(len(plu_tops)-1, plu_bottom_index+max_slip)
+			# -1 was off-by-1 error i think
+			pt_upper_limit = len(plu_tops)-1
 
 			for plu_top_index in range(pt_upper_limit, pt_lower_limit-1, -1):
+				bw_pt_idxs |= {plu_top_index}
 				for plu_bottom_type in range(self.n_units):
+					bw_pb_types |= {plu_bottom_type}
 					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
 					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-					for frame_index in range(frame_upper_limit,frame_lower_limit,-1):
+					# frame_lower_limit = -1
+					# frame_upper_limit = n_frames
+					# added -1 to fix off-by-1 error
+					for frame_index in range(frame_upper_limit,frame_lower_limit-1,-1):
+						bw_frame_idxs |= {frame_index}
 						for edit_op in Ops.CODES:
+							bw_edit_ops |= {edit_op}
 							if edit_op == Ops.IT:
 								hmm_range = [self.n_states-1]
 							elif edit_op == Ops.IB or edit_op == Ops.SUB:
@@ -750,6 +650,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 								hmm_range = range(self.n_states-1,-1,-1)
 
 							for hmm_state in hmm_range:
+								bw_hmm_states |= {hmm_state}
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
 								
 								if curr_state in backward_probs:
@@ -762,16 +663,19 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 										else:
 											backward_probs[prev_state] = prob
 
+
+
 									# Sum forwards & backwards probabilities
 									if curr_state in forward_probs:
-										fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
-
+										# fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
+										fw_bw_prob = forward_probs.get(curr_state, float('-inf')) + \
+													backward_probs.get(curr_state, float('-inf'))
 										# assert(fw_bw_prob != np.nan)
 										fw_bw_probs[curr_state] = fw_bw_prob
+
 										# now we need to normalize 
 										# need to get p(string)
 										# can do this by summing over all other item states in p(*item, string)
-										# log_fb_norm[frame_index] = np.logaddexp(log_fb_norm[frame_index], fw_bw_prob)
 										if edit_op == Ops.IB:
 											# Increase the count in the insert-bottom section of the distribution (add 1 to plu_bottom_type)
 											log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1],
@@ -779,11 +683,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 											tot_ibs += 1
 										elif edit_op == Ops.IT:
 											# Increase the count in the insert-top section of the distribution (the first slot)
-											# with open('logfile', 'a') as f:
-											# 	f.write('=====================\n')
-											# 	f.write('log_op_counts[plu_tops[plu_top_index]][0]: '+str(log_op_counts[plu_tops[plu_top_index]][0])+'\n')
-											# 	f.write('fw_bw_prob: '+str(fw_bw_prob)+'\n')
-											# 	f.write('np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],fw_bw_prob): '+str(np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],fw_bw_prob))+'\n')
 											log_op_counts[plu_tops[plu_top_index]][0] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],
 																								fw_bw_prob)
 											tot_its += 1
@@ -795,94 +694,28 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 										# Update per-frame HMM expected counts
 										log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 
-																															fw_bw_prob)
+																													fw_bw_prob)
 
-
-		print("asserting log_op_counts don't start as nan")
+		
+		# print("asserting log_op_counts don't start as nan")
 		for i in range(len(log_op_counts)):
 			# see if these counts are nan 
-
 			try:
 				assert(not np.any(np.isnan(log_op_counts[i])))
 			except AssertionError:
 				print("isnan assertion excepted in file", file, log_op_counts)
 				assert(not np.any(np.isnan(log_op_counts[i])))
 
-
-		print("accumulate normalizer")
-		for (item, _) in end_items:
-			if item in fw_bw_probs.keys():
-				if np.any(np.isnan(fw_bw_probs[item])):
-					print("got a nan at ", item)
-					assert(2==1)
-				log_fb_norm = np.logaddexp(log_fb_norm, fw_bw_probs[item])
-		# make sure something got added
-		print('asserting log_fb_norm is greater than zero')
-		print("log fb norm is : ", log_fb_norm, " in file ", file.strip())
-
-		# for i in range(len(log_op_counts)):
-		# 		log_op_counts[i] -= log_fb_norm
-
-		# print('log_op_counts after normalizing: ',log_op_counts)
+			# if np.any(log_op_counts[i]>-100):
+			# 	print("over -100 for:: ")
+			# 	print("=============================================")
+			# 	print("\n\n")
+			# 	print(plu_tops)
+			# 	print(list(state_llh))
+			# 	print(log_op_counts)
 
 
-		assert(not np.any(np.isnan(log_fb_norm)))
-		print("passed outside assertion")
-
-
-			# fw_ibs = 0
-			# neg_inf = float('-inf')
-			# log05 = math.log(0.5)
-			# # print("normalizing")
-			# pb_upper_limit = len(plu_tops)-1 + max_slip
-			# pb_lower_limit = -1
-			# for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
-			# 	pt_lower_limit = max(-1,plu_bottom_index-max_slip)
-			# 	pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
-			# 	for plu_top_index in range(pt_lower_limit,pt_upper_limit):
-			# 		for plu_bottom_type in range(self.n_units):
-			# 			frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
-			# 			frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-			# 			for frame_index in range(frame_lower_limit,frame_upper_limit):
-			# 				for edit_op in Ops.CODES:
-			# 					if edit_op == Ops.IT:
-			# 						hmm_range = [self.n_states-1]
-			# 					elif edit_op == Ops.IB or edit_op == Ops.SUB:
-			# 						hmm_range = [0]
-			# 					else:
-			# 						hmm_range = range(self.n_states)
-			# 					for hmm_state in hmm_range:
-			# 						curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-			# 						if curr_state in fw_bw_probs:
-			# 							fw_bw_prob = fw_bw_probs[curr_state]
-			# 							# Update edit operation expected counts
-			# 							if edit_op == Ops.IB:
-			# 								# Increase the count in the insert-bottom section of the distribution (add 1 to plu_bottom_type)
-			# 								if plu_top_index == len(plu_tops)-1:
-			# 									# Special case for last PLU
-			# 									log_op_counts[-1][plu_bottom_type] = np.logaddexp(log_op_counts[-1][plu_bottom_type],
-			# 																					fw_bw_prob - log_fb_norm[frame_index]) 
-																						
-			# 								else:
-			# 									log_op_counts[plu_tops[plu_top_index+1]][plu_bottom_type+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+1],
-			# 																											fw_bw_prob - log_fb_norm[frame_index])
-			# 								tot_ibs += 1
-			# 							elif edit_op == Ops.IT:
-			# 								# Increase the count in the insert-top section of the distribution (the first slot)
-			# 								log_op_counts[plu_tops[plu_top_index]][0] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][0],
-			# 																					fw_bw_prob - log_fb_norm[frame_index])
-			# 								tot_its += 1
-			# 							elif edit_op == Ops.SUB:
-			# 								# Increase the count in the substitute section of the distribution (add 1+self.n_units to plu_bottom_type)
-			# 								log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1] = np.logaddexp(log_op_counts[plu_tops[plu_top_index]][plu_bottom_type+self.n_units+1],
-			# 																													fw_bw_prob - log_fb_norm[frame_index])
-			# 								tot_subs += 1
-
-			# 							# Update per-frame HMM expected counts
-			# 							log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 
-			# 																												fw_bw_prob-log_fb_norm[frame_index])
-
-
+		# print("passed outside assertion")
 		with open('fw_probs', "wb") as f1:
 			pickle.dump(forward_probs, f1)
 		with open('bw_probs', "wb") as f1:
@@ -891,38 +724,117 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			pickle.dump(fw_bw_probs, f1)
 
 		start_items = [ x[0] for x in self.generate_start_items(plu_tops, state_llh) ]
-		start_item_fw_bw_probs = [ fw_bw_probs.get(x, float('-inf')) for x in start_items]
-		start_item_total = logsumexp(start_item_fw_bw_probs)
+		start_item_bw_probs = [ backward_probs.get(x, float('-inf')) for x in start_items]
+		start_item_total = logsumexp(start_item_bw_probs)
 
 		end_items = [ x[0] for x in self.generate_end_items(plu_tops, state_llh, max_slip) ]
-		end_item_fw_bw_probs = [ fw_bw_probs.get(x, float('-inf')) for x in end_items]
-		end_item_total = logsumexp(end_item_fw_bw_probs)
+		end_item_fw_probs = [ forward_probs.get(x, float('-inf')) for x in end_items]
+		end_item_total = logsumexp(end_item_fw_probs)
 
 
-		with open('logfile', 'a') as f:
-			f.write('=====================\n')
-			f.write('start_item_total: '+str(start_item_total)+'\n')
-			f.write('end_item_total: '+str(end_item_total)+'\n')
-
-		print("Frames: "+str(n_frames)+"   Pb types: "+str(self.n_units)+"   Pt types: "+str(max(plu_tops)+1)+"   Pt indices: "+str(len(plu_tops)))
+		# print("Frames: "+str(n_frames)+"   Pb types: "+str(self.n_units)+"   Pt types: "+str(max(plu_tops)+1)+"   Pt indices: "+str(len(plu_tops)))
 
 		# with open('logfile', 'a') as f:
 		# 	f.write('=====================\n')
 		# 	f.write('forward_backward_noisy_channel\n')
 		# 	f.write('log_op_counts: '+str(log_op_counts)+'\n')
 		# 	f.write('log_state_counts: '+str(log_state_counts)+'\n')
-
+		# print("end item total: ", end_item_total)
 		log_op_counts_normalized = log_op_counts - end_item_total
+
+		# if np.any(np.isnan(log_op_counts_normalized)):
+		# 	print("end items:")
+		# 	print(sorted(end_items))
+		# 	print("forward:")
+		# 	fw_ends = np.array([forward_probs.get(x, float('-inf')) for x in sorted(end_items)])
+		# 	print(fw_ends)
+		# 	print("backward:")
+		# 	bw_ends = np.array([backward_probs.get(x,float('-inf')) for x in sorted(end_items)])
+		# 	print(bw_ends)
+		# 	print("sum:")
+		# 	print(fw_ends+bw_ends)
+		# 	print("fw/bw:")
+		# 	print([fw_bw_probs.get(x,float('-inf')) for x in sorted(end_items)])
+
+		# print("checking indices:")
+		assert(len(fw_pb_idxs ^ bw_pb_idxs) == 0)
+		try:
+			assert(len(fw_pt_idxs ^ bw_pt_idxs) == 0)
+		except AssertionError:
+			# # print(fw_pt_idxs ^ bw_pt_idxs)
+			# # print(sorted(fw_pt_idxs))
+			# # print(sorted(bw_pt_idxs))
+			# sys.exit()
+			pass
+		assert(len(fw_pb_types ^ bw_pb_types) == 0)
+		try:
+			assert(len(fw_frame_idxs ^ bw_frame_idxs) == 0)
+		except AssertionError:
+			# print(fw_frame_idxs ^ bw_frame_idxs)
+			# print(sorted(fw_frame_idxs))
+			# print(sorted(bw_frame_idxs))
+			# sys.exit()
+			pass
+		assert(len(fw_edit_ops ^ bw_edit_ops) == 0)
+		assert(len(fw_hmm_states ^ bw_hmm_states) == 0)
+		
+		fw_states = set(forward_probs.keys()) 
+		fw_ends = fw_states & set(end_items)
+		bw_states = set(backward_probs.keys()) 
+		bw_ends = bw_states & set(end_items)
+
+		fw_starts = fw_states & set(start_items)
+		bw_starts = bw_states  & set(start_items)
+
+		total_states = fw_states | bw_states
+		# print("total states: {}".format(len(total_states)))
+		# print("forward states: {}".format(len(fw_states)))
+		# print("backward states: {}".format(len(bw_states)))
+		# print("in forward but not backwards:")
+		# print(len(fw_states - bw_states))
+		# print("in backward but not forwards:")
+		# print(len(bw_states - fw_states))
+
+		# print("ends in forward: ", len(fw_ends))
+		# print("ends in backward: ", len(bw_ends))
+		# print("starts in forward: ", len(fw_starts))
+		# print("starts in backward: ", len(bw_starts))
+		# print("log op counts:")
+		# print(log_op_counts)
+		# print("log_op_counts_normalized:")
+		# print(log_op_counts_normalized)
+
+
+		assert(not np.any(np.isnan(log_state_counts)))
+		assert(not np.any(np.isnan(log_op_counts_normalized)))
 
 		return log_op_counts_normalized, log_state_counts
 
 	def generate_start_items(self, plu_tops, state_llh):
 
-		log_prob_it = self.op_latent_posteriors[plu_tops[0]].grad_log_partition[0]
-		log_prob_ib = self.op_latent_posteriors[plu_tops[0]].grad_log_partition[1:self.n_units+1]
-		log_prob_sub = self.op_latent_posteriors[plu_tops[0]].grad_log_partition[self.n_units+1:]
+		log_prob_all_ops = [self.op_latent_posteriors[plu_tops[0]].grad_log_partition[0]]
+		log_prob_all_ops.extend(self.op_latent_posteriors[plu_tops[0]].grad_log_partition[1:self.n_units+1])
+		log_prob_all_ops.extend(self.op_latent_posteriors[plu_tops[0]].grad_log_partition[self.n_units+1:])
 
+		prob_all_ops = np.exp(log_prob_all_ops)
+		prob_all_ops/= np.sum(prob_all_ops)
 
+		prob_it = prob_all_ops[0]
+		prob_ib = prob_all_ops[1:self.n_units+1]
+		prob_sub = prob_all_ops[self.n_units + 1: ]
+
+		log_prob_it = np.log(prob_it)
+		log_prob_ib = np.log(prob_ib)
+		log_prob_sub = np.log(prob_sub)
+		# log_prob_it = self.op_latent_posteriors[plu_tops[0]].grad_log_partition[0]
+		# log_prob_ib = self.op_latent_posteriors[plu_tops[0]].grad_log_partition[1:self.n_units+1]
+		# log_prob_sub = self.op_latent_posteriors[plu_tops[0]].grad_log_partition[self.n_units+1:]
+
+		try:
+			assert(np.abs(logsumexp([logsumexp(log_prob_it), logsumexp(log_prob_ib), logsumexp(log_prob_sub)]) - 0.0) < 0.000001)
+		except AssertionError:
+			print(np.abs(logsumexp([logsumexp(log_prob_it), logsumexp(log_prob_ib), logsumexp(log_prob_sub)]) - 0.0))
+			sys.exit()
 		# ((frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index), p)
 
 
@@ -996,10 +908,16 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			else:
 				log_prob_all_ops = self.renorms[plu_tops[plu_top_index+1]][plu_bottom_type]
 
-			log_prob_it = log_prob_all_ops[0]
-			log_prob_ib = log_prob_all_ops[1:self.n_units+1]
-			log_prob_sub = log_prob_all_ops[self.n_units+1:]
+			prob_all_ops = np.exp(log_prob_all_ops)
+			prob_all_ops/= np.sum(prob_all_ops)
 
+			prob_it = prob_all_ops[0]
+			prob_ib = prob_all_ops[1:self.n_units+1]
+			prob_sub = prob_all_ops[self.n_units + 1: ]
+
+			log_prob_it = np.log(prob_it)
+			log_prob_ib = np.log(prob_ib)
+			log_prob_sub = np.log(prob_sub)
 		# print('log_prob_ib')
 		# print(log_prob_ib)
 		# print('log_prob_sub')

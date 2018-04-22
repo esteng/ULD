@@ -86,10 +86,10 @@ class Optimizer(metaclass=abc.ABCMeta):
 
 				# Reshaped the list of features.
 				fea_list = shuffled_data[start:end]
-				print("batch_size: ", batch_size)
-				print("len(self.dview): ", len(self.dview))
+				# print("batch_size: ", batch_size)
+				# print("len(self.dview): ", len(self.dview))
 				n_utts = batch_size // len(self.dview)
-				print("n_utts: ", n_utts)
+				# print("n_utts: ", n_utts)
 				new_fea_list = [fea_list[i:i + n_utts]  for i in
 								range(0, len(fea_list), n_utts)]
 				# Update the model.
@@ -108,7 +108,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 				# write to log
 				if self.log_dir is not None:
 
-					print("writing to log file")
+					# print("writing to log file")
 					with open(self.log_file, "a") as f1:
 						f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective]]))
 						f1.write("\n")
@@ -165,7 +165,7 @@ class StochasticVBOptimizer(Optimizer):
 
 	def train(self, fea_list, epoch, time_step):
 		# Propagate the model to all the remote clients.
-		print("TRAINING")
+		# print("TRAINING")
 		self.dview.push({
 			'model': self.model,
 		})
@@ -183,28 +183,28 @@ class StochasticVBOptimizer(Optimizer):
 			acc_stats += val2
 			n_frames += val3
 
-		print("getting kl")
+		# print("getting kl")
 		kl_div = self.model.kl_div_posterior_prior()
-		print("kl div:")
-		print(kl_div)
+		# print("kl div:")
+		# print(kl_div)
 		# Scale the statistics.
 		scale = self.data_stats['count'] / n_frames
-		print('acc_stats[2] before scaling: ', acc_stats[2])
-		print("scaling by {}".format(scale))
+		# print('acc_stats[2] before scaling: ', acc_stats[2])
+		# print("scaling by {}".format(scale))
 		acc_stats *= scale
-		print('acc_stats[2] after scaling: ', acc_stats[2])
-		print("updating model with ")
-		print(acc_stats)
+		# print('acc_stats[2] after scaling: ', acc_stats[2])
+		# print("updating model with ")
+		# print(acc_stats)
 		self.model.natural_grad_update(acc_stats, self.lrate)
-		print("returning")
-		print("scale")
-		print(scale)
-		print("exp_llh")
-		print(exp_llh)
-		print("kl_div")
-		print(kl_div)
-		print("self.data_stats[count]")
-		print(self.data_stats['count'])
+		# print("returning")
+		# print("scale")
+		# print(scale)
+		# print("exp_llh")
+		# print(exp_llh)
+		# print("kl_div")
+		# print(kl_div)
+		# print("self.data_stats[count]")
+		# print(self.data_stats['count'])
 		return (scale * exp_llh - kl_div) / self.data_stats['count']
 
 
@@ -219,12 +219,9 @@ class NoisyChannelOptimizer(Optimizer):
 	# because the real difference comes in train()
 	# def run(self, data, callback):
 
-	def hello(mystring):
-		print(mystring)
-
 	def e_step_nonstatic(self, args_list):
 
-		print(type(self))
+		# print(type(self))
 
 		model = self.model
 		data_stats = self.data_stats
@@ -286,11 +283,11 @@ class NoisyChannelOptimizer(Optimizer):
 
 			
 
-		print("accumulating states from a batch:")
-		print("exp_llh is ")
-		print(exp_llh)
-		print("acc-stats is ")
-		print(acc_stats)
+		# print("accumulating states from a batch:")
+		# print("exp_llh is ")
+		# print(exp_llh)
+		# print("acc-stats is ")
+		# print(acc_stats)
 
 		n_frames = stats_list[0][2]
 		for val1, val2, val3 in stats_list[1:]:
@@ -357,7 +354,6 @@ class ToyNoisyChannelOptimizer(Optimizer):
 
 	def e_step_nonstatic(self, args_list):
 
-		print(type(self))
 
 		model = self.model
 		data_stats = self.data_stats
@@ -367,8 +363,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		n_frames = 0
 
 		for arg in args_list:
-			print("GOT ARG")
-			print("arg is : ", str(arg))
+
 			(data, tops) = arg
 
 			# Mean / Variance normalization.
@@ -448,8 +443,8 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
 
-		for s in acc_stats._stats:
-			print(s)
+		# for s in acc_stats._stats:
+		# 	print(s)
 
 		n_frames = stats_list[0][2]
 		for val1, val2, val3 in stats_list[1:]:
@@ -457,31 +452,15 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			acc_stats += val2
 			n_frames += val3
 
-		# with open('logfile', 'a') as f:
-		# 	f.write('=====================\n')
-		# 	f.write('train\n')
-		# 	f.write('accumulated op_counts_normalized: '+str(acc_stats[2:])+'\n')
-
 		kl_div = self.model.kl_div_posterior_prior()
 
 		# Scale the statistics.
 		scale = self.data_stats['count'] / n_frames
 		acc_stats *= scale
 
-		# with open('logfile', 'a') as f:
-		# 	f.write('scale:'+str(scale)+'\n')
-		# 	f.write('scaled op_counts_normalized: '+str(acc_stats[2:])+'\n')
-
-		
-		with open("logfile", "a") as f1:
-			f1.write("exp_llh: ")
-			f1.write(str(exp_llh))
-			f1.write("kl_div: ")
-			f1.write(str(kl_div))
-
-			f1.write("datastats[count]: ")
-			f1.write(str(self.data_stats["count"]))
-
+		# print("exp_llh: ", str(exp_llh))
+		# print("kl_div: ", str(kl_div))
+		# print("datastats[count]: ", str(self.data_stats["count"]))
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
