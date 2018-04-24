@@ -18,3 +18,14 @@ writeups/MTL-AI-abstract/abstract.dvi
 # Ignore textgrids directories
 /**/textgrids*
 
+# Ignore pickled model files
+code/batch*
+
+# Ignore old logfiles
+code/test_example/old_*
+
+# Ignore IPython notebook checkpoints
+code/test_example/.ipynb_checkpoints/*
+
+# Ignore amdtk build directory
+code/amdtk/build/

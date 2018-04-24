@@ -18,9 +18,9 @@ sys.path.insert(0, 'amdtk')
 import amdtk
 
 print("successfully completed imports")
-amdtk.utils.test_import()
+#amdtk.utils.test_import()
 
-def create_small_model():
+def create_small_model(max_slip=0.05):
 
 	n_units = 3
 	n_states = 3
@@ -30,7 +30,7 @@ def create_small_model():
 
 	n_mfccs = 4
 
-	max_slip_factor = 0.05
+	max_slip_factor = max_slip
 
 	plu_tops = [3,0,1]
 	num_tops = max(plu_tops)+1
@@ -66,14 +66,14 @@ def create_small_model():
 def perturb_small_model(model, n_mfccs):
 
 	# Perturb the parameters just a little
-	acc_stats = [
-		[0.2,0.3,0.6], # edit op counts
-		[0.1,0.3,0.2], # ib counts
-		[0.4,0.1,0.2,0.3], # it counts
-		[0.01,0.03,0.02,0.04,0.05,0.07,0.06,0.08,0.09,0.11,0.10,0.12], # sub counts
+	acc_stats = amdtk.EFDStats([
 		np.random.rand(model.n_units*model.n_states,model.n_comp_per_states), # state stats
-		np.random.rand(model.n_units*model.n_states*model.n_comp_per_states,n_mfccs*4)# gauss stats
-	]
+		np.random.rand(model.n_units*model.n_states*model.n_comp_per_states,n_mfccs*4), # gauss stats
+		np.array([0.21, 0.12, 0.13, 0.14, 0.25, 0.16, 0.17]), # 4 distributions over bottom edit ops, one per top PLU
+		np.array([0.11, 0.22, 0.13, 0.14, 0.15, 0.26, 0.17]), 
+		np.array([0.11, 0.12, 0.23, 0.14, 0.15, 0.16, 0.27]), 
+		np.array([0.11, 0.12, 0.13, 0.24, 0.15, 0.16, 0.17])
+	])
 	lrate = 0.1
 
 	model.natural_grad_update(acc_stats, lrate)
@@ -89,10 +89,7 @@ def start_items_test(verbose=False):
 
 	# (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
 
-	log_prob_ops = model.op_type_latent_posterior.grad_log_partition
-	log_prob_ib = model.ib_latent_posterior.grad_log_partition
-	log_prob_it = model.it_latent_posterior.grad_log_partition
-	log_prob_sub = model.sub_latent_posterior.grad_log_partition
+	log_prob_ops = [ model.op_latent_posteriors[i].grad_log_partition for i in range(len(model.op_latent_posteriors)) ]
 
 	# Test generate_start_items
 	start_items = model.generate_start_items(plu_tops, state_llh)
@@ -100,16 +97,17 @@ def start_items_test(verbose=False):
 
 	expected_start_items = [
 		# Insert-top start item
-		((-1,2,-1,-1,amdtk.Ops.IT,0), log_prob_ops[amdtk.Ops.IT] + log_prob_it[3]),
+		((-1,2,0,-1,amdtk.Ops.IT,0), log_prob_ops[3][0]),
 		# Insert-bottom start items
-		((0,0,0,0,amdtk.Ops.IB,-1), state_llh[0,0] + log_prob_ops[amdtk.Ops.IB] + log_prob_ib[0]),
-		((0,0,1,0,amdtk.Ops.IB,-1), state_llh[0,3] + log_prob_ops[amdtk.Ops.IB] + log_prob_ib[1]),
-		((0,0,2,0,amdtk.Ops.IB,-1), state_llh[0,6] + log_prob_ops[amdtk.Ops.IB] + log_prob_ib[2]),
+		((0,0,0,0,amdtk.Ops.IB,-1), state_llh[0,0] + log_prob_ops[3][1]),
+		((0,0,1,0,amdtk.Ops.IB,-1), state_llh[0,3] + log_prob_ops[3][2]),
+		((0,0,2,0,amdtk.Ops.IB,-1), state_llh[0,6] + log_prob_ops[3][3]),
 		# Substitute start items
-		((0,0,0,0,amdtk.Ops.SUB,0), state_llh[0,0] + log_prob_ops[amdtk.Ops.SUB] + log_prob_sub[3]), # =0*4+3
-		((0,0,1,0,amdtk.Ops.SUB,0), state_llh[0,3] + log_prob_ops[amdtk.Ops.SUB] + log_prob_sub[7]), # =1*4+3
-		((0,0,2,0,amdtk.Ops.SUB,0), state_llh[0,6] + log_prob_ops[amdtk.Ops.SUB] + log_prob_sub[11]) # =2*4+3
-		]
+		((0,0,0,0,amdtk.Ops.SUB,0), state_llh[0,0] + log_prob_ops[3][4]), # =0*4+3
+		((0,0,1,0,amdtk.Ops.SUB,0), state_llh[0,3] + log_prob_ops[3][5]), # =1*4+3
+		((0,0,2,0,amdtk.Ops.SUB,0), state_llh[0,6] + log_prob_ops[3][6])  # =2*4+3
+	]
+		
 	expected_start_items_set = set(expected_start_items)
 
 	if verbose:
@@ -137,10 +135,7 @@ def next_states_test_1(verbose=False):
 
 	# (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
 
-	log_prob_ops = model.op_type_latent_posterior.grad_log_partition
-	log_prob_ib = model.ib_latent_posterior.grad_log_partition
-	log_prob_it = model.it_latent_posterior.grad_log_partition
-	log_prob_sub = model.sub_latent_posterior.grad_log_partition
+	log_prob_ops = [ model.op_latent_posteriors[i].grad_log_partition for i in range(len(model.op_latent_posteriors)) ]
 
 	# Test next_states
 	max_slip = math.ceil(len(plu_tops)*max_slip_factor) # = 1
@@ -148,23 +143,23 @@ def next_states_test_1(verbose=False):
 	frames_per_top = math.ceil(float(n_frames)/len(plu_tops)) # =ceil(11/3)=4
 	assert frames_per_top==4
 
-	curr_state = ((-1,2,-1,-1,amdtk.Ops.IT,0), log_prob_ops[amdtk.Ops.IT] + log_prob_it[3])
-	nexts = model.next_states(curr_state, plu_tops, state_llh, max_slip, frames_per_top)
+	curr_state = ((-1,2,0,-1,amdtk.Ops.IT,0), log_prob_ops[3][0])
+	nexts = model.next_states(curr_state, plu_tops, state_llh, max_slip, frames_per_top, log05=math.log(0.5), logging=False)
 	nexts_set = set(nexts)
 
 	# (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
-
+	# PLU tops are [3,0,1]
 	expected_nexts = [
 		# Next via performing an insert-top
 		# 	Can't! We are already ahead of the bottom by one frame
 		# Next via performing an insert-bottom
-		((0,0,0,0,amdtk.Ops.IB,0), curr_state[1] + state_llh[0,0] + log_prob_ops[amdtk.Ops.IB] + log_prob_ib[0] + math.log(0.5)),
-		((0,0,1,0,amdtk.Ops.IB,0), curr_state[1] + state_llh[0,3] + log_prob_ops[amdtk.Ops.IB] + log_prob_ib[1] + math.log(0.5)),
-		((0,0,2,0,amdtk.Ops.IB,0), curr_state[1] + state_llh[0,6] + log_prob_ops[amdtk.Ops.IB] + log_prob_ib[2] + math.log(0.5)),
+		((0,0,0,0,amdtk.Ops.IB,0), curr_state[1] + state_llh[0,0] + log_prob_ops[0][1] + math.log(0.5)),
+		((0,0,1,0,amdtk.Ops.IB,0), curr_state[1] + state_llh[0,3] + log_prob_ops[0][2] + math.log(0.5)),
+		((0,0,2,0,amdtk.Ops.IB,0), curr_state[1] + state_llh[0,6] + log_prob_ops[0][3] + math.log(0.5)),
 		# Next via performing a substitute
-		((0,0,0,0,amdtk.Ops.SUB,1), curr_state[1] + state_llh[0,0] + log_prob_ops[amdtk.Ops.SUB] + log_prob_sub[0] + math.log(0.5)), # =0*4+0
-		((0,0,1,0,amdtk.Ops.SUB,1), curr_state[1] + state_llh[0,3] + log_prob_ops[amdtk.Ops.SUB] + log_prob_sub[4] + math.log(0.5)), # =1*4+0
-		((0,0,2,0,amdtk.Ops.SUB,1), curr_state[1] + state_llh[0,6] + log_prob_ops[amdtk.Ops.SUB] + log_prob_sub[8] + math.log(0.5)), # =2*4+0
+		((0,0,0,0,amdtk.Ops.SUB,1), curr_state[1] + state_llh[0,0] + log_prob_ops[0][4] + + math.log(0.5)), # =0*4+0
+		((0,0,1,0,amdtk.Ops.SUB,1), curr_state[1] + state_llh[0,3] + log_prob_ops[0][5] + + math.log(0.5)), # =1*4+0
+		((0,0,2,0,amdtk.Ops.SUB,1), curr_state[1] + state_llh[0,6] + log_prob_ops[0][6] + + math.log(0.5)), # =2*4+0
 		# Can't do any HMM transitions because we are in an insert-top state,
 		# which doesn't allow HMM transitions
 	]
@@ -185,6 +180,68 @@ def next_states_test_1(verbose=False):
 	assert expected_nexts_set==nexts_set
 
 	print("TEST PASSED")
+
+
+def next_states_test_1a(verbose=False):
+
+	print("Running next_states_test_1a()...")
+
+	n_mfccs = 4
+
+	model = amdtk.PhoneLoopNoisyChannel.create(
+	    n_units=2,  # number of acoustic units
+	    n_states=3,   # number of states per unit
+	    n_comp_per_state=2,   # number of Gaussians per emission
+	    n_top_units=2, # size of top PLU alphabet
+	    max_slip_factor=1.0, # difference allowed between top and bottom PLU index
+	    mean=np.zeros(n_mfccs), 
+	    var=np.ones(n_mfccs) #,
+	    #concentration=conc
+	)
+
+	# state_llh must be n_frames x (n_units * n_states)
+	state_llh = np.array([[0.01,0.01,0.01,  0.01,0.01,0.01],
+						  [0.01,0.01,0.01,  0.01,0.01,0.01],
+						  [0.01,0.01,0.01,  0.01,0.01,0.01],
+						  [0.40,0.01,0.01,  0.01,0.01,0.01],
+						  [0.01,0.40,0.01,  0.01,0.01,0.01],
+						  [0.01,0.40,0.01,  0.01,0.01,0.01],
+						  [0.01,0.40,0.01,  0.01,0.01,0.01],
+						  [0.01,0.01,0.01,  0.01,0.01,0.01],
+						  [0.01,0.01,0.01,  0.01,0.30,0.01],
+						  [0.01,0.01,0.01,  0.10,0.10,0.10],
+						  [0.01,0.01,0.01,  0.01,0.01,0.01]])
+	state_llh = np.log(state_llh)
+
+
+	plu_tops = [1,0,1,0]
+
+	n_frames = 11
+
+	#model, max_slip_factor, plu_tops, state_llh, n_mfccs, n_frames = create_small_model(max_slip=1.0)
+
+	#perturb_small_model(model, n_mfccs)
+
+	# (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
+
+	log_prob_ops = [ model.op_latent_posteriors[i].grad_log_partition for i in range(len(model.op_latent_posteriors)) ]
+
+	# Test next_states
+	max_slip_factor = 1.0
+	max_slip = math.ceil(len(plu_tops)*max_slip_factor) # = 1
+	assert max_slip==4 # Just making sure
+	frames_per_top = math.ceil(float(n_frames)/len(plu_tops)) # =ceil(11/3)=4
+	print('frames_per_top', frames_per_top)
+	assert frames_per_top==3
+
+	curr_state = ((-1,2,0,-1,amdtk.Ops.IT,1), log_prob_ops[0][0])
+
+	print("State:", curr_state)
+
+	nexts = model.next_states(curr_state, plu_tops, state_llh, max_slip, frames_per_top, log05=math.log(0.5), logging=False)
+	nexts_set = set(nexts)
+
+	print("Nexts:", nexts)
 
 
 def next_states_test_2(verbose=False):
@@ -493,6 +550,7 @@ if __name__ == "__main__":
 
 	start_items_test(verbose)
 	next_states_test_1(verbose)
+	next_states_test_1a(verbose)
 	next_states_test_2(verbose)
 
 	end_items_test(verbose)

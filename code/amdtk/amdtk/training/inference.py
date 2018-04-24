@@ -207,6 +207,81 @@ class StochasticVBOptimizer(Optimizer):
 		print(self.data_stats['count'])
 		return (scale * exp_llh - kl_div) / self.data_stats['count']
 
+class ToyStochasticVBOptimizer(StochasticVBOptimizer):
+
+	@staticmethod
+	@interactive
+	def e_step(args_list):
+		exp_llh = 0.
+		acc_stats = None
+		n_frames = 0
+
+		for arg in args_list:
+			data = arg
+
+			# Mean / Variance normalization.
+			data -= data_stats['mean']
+			data /= numpy.sqrt(data_stats['var'])
+
+			# Get the accumulated sufficient statistics for the
+			# given set of features.
+			s_stats = model.get_sufficient_stats(data)
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats,
+															 accumulate=True)
+
+			exp_llh += numpy.sum(llh)
+			n_frames += len(data)
+			if acc_stats is None:
+				acc_stats = new_acc_stats
+			else:
+				acc_stats += new_acc_stats
+
+		return (exp_llh, acc_stats, n_frames)
+
+	def train(self, fea_list, epoch, time_step):
+		# Propagate the model to all the remote clients.
+		print("TRAINING")
+		self.dview.push({
+			'model': self.model,
+		})
+
+		# Parallel accumulation of the sufficient statistics.
+		stats_list = self.dview.map_sync(ToyStochasticVBOptimizer.e_step,
+										 fea_list)
+
+		# Accumulate the results from all the jobs.
+		exp_llh = stats_list[0][0]
+		acc_stats = stats_list[0][1]
+		n_frames = stats_list[0][2]
+		for val1, val2, val3 in stats_list[1:]:
+			exp_llh += val1
+			acc_stats += val2
+			n_frames += val3
+
+		print("getting kl")
+		kl_div = self.model.kl_div_posterior_prior()
+		print("kl div:")
+		print(kl_div)
+		# Scale the statistics.
+		scale = self.data_stats['count'] / n_frames
+		print('acc_stats[2] before scaling: ', acc_stats[2])
+		print("scaling by {}".format(scale))
+		acc_stats *= scale
+		print('acc_stats[2] after scaling: ', acc_stats[2])
+		print("updating model with ")
+		print(acc_stats)
+		self.model.natural_grad_update(acc_stats, self.lrate)
+		print("returning")
+		print("scale")
+		print(scale)
+		print("exp_llh")
+		print(exp_llh)
+		print("kl_div")
+		print(kl_div)
+		print("self.data_stats[count]")
+		print(self.data_stats['count'])
+		return (scale * exp_llh - kl_div) / self.data_stats['count']
+
 
 class NoisyChannelOptimizer(Optimizer):
 
