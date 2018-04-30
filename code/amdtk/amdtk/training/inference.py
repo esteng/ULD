@@ -330,6 +330,8 @@ class NoisyChannelOptimizer(Optimizer):
 				tops = [int(x) for x in tops]
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
+			print("max data")
+			print(np.max(data))
 			s_stats = model.get_sufficient_stats(data)
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
 															 accumulate=True, filename=fea_file)
@@ -365,19 +367,25 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		for arg in args_list:
 
 			(data, tops) = arg
-
+			new_data = np.copy(data)
 			# Mean / Variance normalization.
-			data -= data_stats['mean']
-			data /= np.sqrt(data_stats['var'])
-
+			new_data -= data_stats['mean']
+			# print("subtract mean")
+			# print(np.max(data))
+			new_data /= np.sqrt(data_stats['var'])
+			# print("divide by var")
+			# print("var: ", data_stats['var'])
+			# print(np.max(data))
 
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
-			s_stats = model.get_sufficient_stats(data)
+			print("max data")
+			print(np.max(new_data))
+			s_stats = model.get_sufficient_stats(new_data)
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
 
 			exp_llh += np.sum(llh)
-			n_frames += len(data)
+			n_frames += len(new_data)
 			if acc_stats is None:
 				acc_stats = new_acc_stats
 			else:
@@ -458,9 +466,9 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		scale = self.data_stats['count'] / n_frames
 		acc_stats *= scale
 
-		# print("exp_llh: ", str(exp_llh))
-		# print("kl_div: ", str(kl_div))
-		# print("datastats[count]: ", str(self.data_stats["count"]))
+		print("exp_llh: ", str(exp_llh))
+		print("kl_div: ", str(kl_div))
+		print("datastats[count]: ", str(self.data_stats["count"]))
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
