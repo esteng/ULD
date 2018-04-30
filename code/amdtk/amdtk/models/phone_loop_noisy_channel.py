@@ -489,11 +489,18 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 	def forward_backward_noisy_channel(self, plu_tops, state_llh, file):
 
-		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
-
 		n_frames = state_llh.shape[0]
 
+		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
+
+		max_slip = max( max_slip, len(plu_tops) - math.floor(n_frames/3) )
+
 		frames_per_top = math.ceil(float(n_frames)/len(plu_tops))
+
+		print('self.max_slip_factor:', self.max_slip_factor)
+		print('len(plu_tops):', len(plu_tops))
+		print('max_slip:', max_slip)
+		print('frames_per_top:', frames_per_top)
 
 		# Calculate forward probabilities
 		forward_probs = {}
@@ -543,9 +550,11 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 					fw_pb_types |= {plu_bottom_type}
 					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
 					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
+
 					# frame_lower_limit = -1
 					# frame_upper_limit = n_frames-1
 					for frame_index in range(frame_lower_limit,frame_upper_limit):
+
 						fw_frame_idxs |= {frame_index}
 						for edit_op in Ops.CODES:
 							fw_edit_ops |= {edit_op}
@@ -558,6 +567,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 							for hmm_state in hmm_range:
 								fw_hmm_states |= {hmm_state}
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
+
+
 								
 
 								# curr_forward =  forward_arr[np.array(curr_state)]
@@ -700,28 +711,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# print("asserting log_op_counts don't start as nan")
 		for i in range(len(log_op_counts)):
 			# see if these counts are nan 
+			print('log_op_counts[i]: ',log_op_counts[i])
 			try:
 				assert(not np.any(np.isnan(log_op_counts[i])))
 			except AssertionError:
 				print("isnan assertion excepted in file", file, log_op_counts)
 				assert(not np.any(np.isnan(log_op_counts[i])))
-
-			# if np.any(log_op_counts[i]>-100):
-			# 	print("over -100 for:: ")
-			# 	print("=============================================")
-			# 	print("\n\n")
-			# 	print(plu_tops)
-			# 	print(list(state_llh))
-			# 	print(log_op_counts)
-
-
-		# print("passed outside assertion")
-		with open('fw_probs', "wb") as f1:
-			pickle.dump(forward_probs, f1)
-		with open('bw_probs', "wb") as f1:
-			pickle.dump(backward_probs, f1)
-		with open('fw_bw_probs', "wb") as f1:
-			pickle.dump(fw_bw_probs, f1)
 
 		start_items = [ x[0] for x in self.generate_start_items(plu_tops, state_llh) ]
 		start_item_bw_probs = [ backward_probs.get(x, float('-inf')) for x in start_items]
@@ -730,6 +725,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		end_items = [ x[0] for x in self.generate_end_items(plu_tops, state_llh, max_slip) ]
 		end_item_fw_probs = [ forward_probs.get(x, float('-inf')) for x in end_items]
 		end_item_total = logsumexp(end_item_fw_probs)
+
+		print('end_item_total: ', end_item_total)
 
 
 		# print("Frames: "+str(n_frames)+"   Pb types: "+str(self.n_units)+"   Pt types: "+str(max(plu_tops)+1)+"   Pt indices: "+str(len(plu_tops)))
@@ -740,7 +737,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# 	f.write('log_op_counts: '+str(log_op_counts)+'\n')
 		# 	f.write('log_state_counts: '+str(log_state_counts)+'\n')
 		# print("end item total: ", end_item_total)
-		log_op_counts_normalized = log_op_counts - end_item_total
+		log_op_counts_normalized = [ log_op_counts_i - end_item_total for log_op_counts_i in log_op_counts ]
 
 		# if np.any(np.isnan(log_op_counts_normalized)):
 		# 	print("end items:")
@@ -799,10 +796,14 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# print("ends in backward: ", len(bw_ends))
 		# print("starts in forward: ", len(fw_starts))
 		# print("starts in backward: ", len(bw_starts))
-		# print("log op counts:")
-		# print(log_op_counts)
-		# print("log_op_counts_normalized:")
-		# print(log_op_counts_normalized)
+
+		print('end items fw probs:', [ (x, forward_probs[x]) for x in end_items if x in forward_probs ])
+		print('start items bw probs:', [ (x, backward_probs[x]) for x in start_items if x in backward_probs ])
+
+		print("log_state_counts:", log_state_counts)
+
+		print("log_op_counts:", log_op_counts)
+		print("log_op_counts_normalized:", log_op_counts_normalized)
 
 
 		assert(not np.any(np.isnan(log_state_counts)))

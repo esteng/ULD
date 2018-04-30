@@ -366,6 +366,8 @@ class ToyNoisyChannelOptimizer(Optimizer):
 
 			(data, tops) = arg
 
+			print('----- top sequence', tops, '. data len =', data.shape[0], '-----')
+
 			# Mean / Variance normalization.
 			data -= data_stats['mean']
 			data /= np.sqrt(data_stats['var'])
@@ -397,6 +399,9 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		"""
 		start_time = time.time()
 		for epoch in range(self.epochs):
+
+			print('========== EPOCH', epoch, '==========')
+
 			# Create a temporary directory.
 			self.temp_dir = os.path.join(self.dir_path, 'epoch' +
 										 str(epoch + 1))
