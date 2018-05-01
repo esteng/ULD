@@ -379,8 +379,8 @@ class ToyNoisyChannelOptimizer(Optimizer):
 
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
-			print("max data")
-			print(np.max(new_data))
+			# print("max data")
+			# print(np.max(new_data))
 			s_stats = model.get_sufficient_stats(new_data)
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
 

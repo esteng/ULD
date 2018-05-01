@@ -358,7 +358,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		retval = 0.
 		for i in range(len(self.op_latent_posteriors)):
 			retval += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i])
-		print("after adding op kls retval is ", retval)
+		# print("after adding op kls retval is ", retval)
 
 		for comp in self.components:
 			retval += comp.posterior.kl_div(comp.prior)
@@ -373,12 +373,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	# @profile(immediate=True)
 	def get_posteriors(self, s_stats, top_seq, accumulate=False,filename=None):
 		import time
-		print("max s_stats:")
-		print(np.max(s_stats))
+		# print("max s_stats:")
+		# print(np.max(s_stats))
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
-		print("max state_llh at {}:".format(time.clock()))
-		print(np.max(state_llh))
+		# print("max state_llh at {}:".format(time.clock()))
+		# print(np.max(state_llh))
 		# print(logsumexp(state_llh, axis=1))
 		# print(state_llh)
 		# The workhorse
@@ -444,9 +444,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				# sys.exit()
 			if i == 1:
 				print("op count i:")
-				print(op_count_i)
+				# print(op_count_i)
 				print("log op count:")
-				print(np.log(op_count_i))
+				# print(np.log(op_count_i))
 				# print('======'+str(i)+'======\n')
 				# print('before update natural_params: '+str(self.op_latent_posteriors[i].natural_params))
 				# print('before update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition))
@@ -460,7 +460,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			if i == 1:
 				print("normalized grad log partition in linear space after")
 				normed = np.exp(self.op_latent_posteriors[i].grad_log_partition - logsumexp(self.op_latent_posteriors[i].grad_log_partition))
-				print(normed)
+				# print(normed)
 			# print('after update natural_params: '+str(self.op_latent_posteriors[i].natural_params))
 			# print('after update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition))
 
@@ -756,6 +756,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# print(excessive_bw)
 		# print("both:")
 		# print(excessive_fw_bw)
+		print("log op counts are: ", type(log_op_counts))
+		print("end item total is", type(end_item_total))
 		log_op_counts_normalized = log_op_counts - end_item_total
 
 		# if np.any(np.isnan(log_op_counts_normalized)):
