@@ -17,13 +17,15 @@ import sys
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 # DEBUG = True
 DEBUG = True
-# resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
-resume=None
+# resume = "/Users/Elias/ULD/code/models/epoch-2-batch-4"
+resume = None
+train=True
+# resume=None
 import amdtk
 import subprocess
 
 
-np.seterr(divide='raise', over='warn', under='warn', invalid='raise')
+# np.seterr(divide='warn', over='warn', under='warn', invalid='raise')
 
 print("successfully completed imports")
 
@@ -58,7 +60,7 @@ def accumulate_stats(data_stats):
     data_stats = {
         'count': n_frames,
         'mean': mean,
-        'var': var
+        'var': var/100
     }
     return data_stats
 
@@ -75,8 +77,8 @@ print('Connected to', len(dview), 'jobs.')
 
 
 print("done importing!")
+# audio_dir = '../audio/icicles'
 audio_dir = '../audio/FAEM0'
-# audio_dir = '../audio/FAEM0'
 
 audio_dir = os.path.abspath(audio_dir)
 
@@ -155,25 +157,27 @@ else:
     with open(resume, 'rb') as f1:
         model = pickle.load(f1)
 
-print("Creating VB optimizer...")   
-optimizer = amdtk.NoisyChannelOptimizer(
-    dview, 
-    final_data_stats, 
-    args= {'epochs': 3,
-     'batch_size': 4,
-     'lrate': 0.01,
-     'pkl_path': "models/",
-     'log_dir': 'logs'},
-    model=model,
+if train: 
+	data_stats= final_data_stats
+	print("Creating VB optimizer...")   
+	optimizer = amdtk.NoisyChannelOptimizer(
+	    dview, 
+	    data_stats, 
+	    args= {'epochs': 3,
+	     'batch_size': 4,
+	     'lrate': 0.01,
+	     'pkl_path': "models/",
+	     'log_dir': 'logs'},
+	    model=model,
 
-)
+	)
 
-print("Running VB optimization...")
-begin = systime.time()
-print("running with {} paths".format(len(list(zipped_paths))))
-optimizer.run(zipped_paths, callback)
-end = systime.time()
-print("VB optimization took ",end-begin," seconds.")
+	print("Running VB optimization...")
+	begin = systime.time()
+	print("running with {} paths".format(len(list(zipped_paths))))
+	optimizer.run(zipped_paths, callback)
+	end = systime.time()
+	print("VB optimization took ",end-begin," seconds.")
 
 # fig1 = figure(
 #     x_axis_label='time (s)', 
@@ -212,8 +216,8 @@ for (fea_path, top_path) in zipped_paths:
 
     #result = model.decode(data, tops, state_path=False)
     #result_path = model.decode(data, tops, state_path=True)
-    (result_intervals, edit_path) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
-
+    # (result_intervals, edit_path, hmm_i) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
+    (result_intervals, edit_path, _) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
     print("---")
     print("Phone sequence for file", fea_path, ":")
     print(result_intervals)

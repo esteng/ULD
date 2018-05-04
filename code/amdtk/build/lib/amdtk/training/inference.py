@@ -51,15 +51,15 @@ class Optimizer(metaclass=abc.ABCMeta):
 		self.time_step = 0
 		self.data_stats = data_stats
 
-		# with self.dview.sync_imports():
-		# 	import numpy
-		# 	from amdtk import read_htk
-		# 	import _pickle as pickle
-		# 	import os
+		with self.dview.sync_imports():
+			import numpy
+			from amdtk import read_htk
+			import _pickle as pickle
+			import os
 
-		# self.dview.push({
-		# 	'data_stats': data_stats
-		# })
+		self.dview.push({
+			'data_stats': data_stats
+		})
 
 	def run(self, data, callback):
 		import _pickle as pickle
@@ -221,7 +221,7 @@ class NoisyChannelOptimizer(Optimizer):
 
 	def e_step_nonstatic(self, args_list):
 
-		# print(type(self))
+		print("INSIDE ESTEP NONSTATIC")
 
 		model = self.model
 		data_stats = self.data_stats
@@ -261,33 +261,25 @@ class NoisyChannelOptimizer(Optimizer):
 	def train(self, fea_list, epoch, time_step):
 
 		# Propagate the model to all the remote clients.
-		# self.dview.push({
-		# 	'model': self.model,
-		# })
+		self.dview.push({
+			'model': self.model,
+		})
 
 
 		# Parallel accumulation of the sufficient statistics.
-		# stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-		#                                 fea_list)
+		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
+		                                fea_list)
 
 		# Serial version
-		stats_list = []
-		for pair in fea_list:
-			stats_list.append(self.e_step_nonstatic(pair))
+		# stats_list = []
+		# for pair in fea_list:
+		# 	stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
 
-
-			
-
-		# print("accumulating states from a batch:")
-		# print("exp_llh is ")
-		# print(exp_llh)
-		# print("acc-stats is ")
-		# print(acc_stats)
 
 		n_frames = stats_list[0][2]
 		for val1, val2, val3 in stats_list[1:]:
@@ -366,18 +358,27 @@ class ToyNoisyChannelOptimizer(Optimizer):
 
 			(data, tops) = arg
 
-			# Mean / Variance normalization.
-			data -= data_stats['mean']
-			data /= np.sqrt(data_stats['var'])
+			print('----- top sequence', tops, '. data len =', data.shape[0], '-----')
 
+			new_data = np.copy(data)
+			# Mean / Variance normalization.
+			new_data -= data_stats['mean']
+			# print("subtract mean")
+			# print(np.max(data))
+			new_data /= np.sqrt(data_stats['var'])
+			# print("divide by var")
+			# print("var: ", data_stats['var'])
+			# print(np.max(data))
 
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
-			s_stats = model.get_sufficient_stats(data)
+			# print("max data")
+			# print(np.max(new_data))
+			s_stats = model.get_sufficient_stats(new_data)
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
 
 			exp_llh += np.sum(llh)
-			n_frames += len(data)
+			n_frames += len(new_data)
 			if acc_stats is None:
 				acc_stats = new_acc_stats
 			else:
@@ -397,6 +398,9 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		"""
 		start_time = time.time()
 		for epoch in range(self.epochs):
+
+			print('========== EPOCH', epoch, '==========')
+
 			# Create a temporary directory.
 			self.temp_dir = os.path.join(self.dir_path, 'epoch' +
 										 str(epoch + 1))
@@ -458,9 +462,9 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		scale = self.data_stats['count'] / n_frames
 		acc_stats *= scale
 
-		# print("exp_llh: ", str(exp_llh))
-		# print("kl_div: ", str(kl_div))
-		# print("datastats[count]: ", str(self.data_stats["count"]))
+		print("exp_llh: ", str(exp_llh))
+		print("kl_div: ", str(kl_div))
+		print("datastats[count]: ", str(self.data_stats["count"]))
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
 

@@ -94,20 +94,12 @@ class EFDPrior(PersistentModel, metaclass=abc.ABCMeta):
         # Expected value of the sufficient statistics with respect to
         # the current distribution
         expected_value = self.grad_log_partition
-        print("expected value: ", expected_value)
         # Natural parameters of the current and given distributions.
         nparams1 = self.natural_params
         nparams2 = dist.natural_params
-        print("posterior nat params: ", nparams1)
-        print("prior nat params: ", nparams2)
-
         # Log-partition of the current and given distributions.
         log_partition1 = self.log_partition
         log_partition2 = dist.log_partition
-
-        print("posterior log partition: ", log_partition1)
-        print("prior log partition: ", log_partition2)
-
         # Compute the KL divergence.
         retval = (nparams1 - nparams2).dot(expected_value)
         retval += log_partition2 - log_partition1
