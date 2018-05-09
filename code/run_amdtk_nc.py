@@ -17,7 +17,7 @@ import sys
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 # DEBUG = True
 DEBUG = True
-# resume = "/Users/Elias/ULD/code/models/epoch-2-batch-4"
+# resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
 resume = None
 train=True
 # resume=None
@@ -60,7 +60,7 @@ def accumulate_stats(data_stats):
     data_stats = {
         'count': n_frames,
         'mean': mean,
-        'var': var/100
+        'var': var/20
     }
     return data_stats
 
@@ -167,6 +167,7 @@ if train:
 	     'batch_size': 4,
 	     'lrate': 0.01,
 	     'pkl_path': "models/",
+	     'audio_dir': audio_dir,
 	     'log_dir': 'logs'},
 	    model=model,
 

@@ -33,6 +33,8 @@ import os
 from ipyparallel.util import interactive
 import _pickle as pickle
 from amdtk import read_htk
+from ..evals import evaluate_model
+from ..evals import avg_nmi
 
 
 class Optimizer(metaclass=abc.ABCMeta):
@@ -42,6 +44,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 		self.epochs = int(args.get('epochs', 1))
 		self.batch_size = int(args.get('batch_size', 2))
 		self.pkl_path = args.get("pkl_path", None)
+		self.audio_dir = args.get("audio_dir",None)
 		self.log_dir = args.get("log_dir", None)
 		if self.log_dir is not None:
 			self.log_file = self.log_dir  + "/" + time.strftime("opt_%Y-%m-%d_%H:%M.log")
@@ -103,6 +106,15 @@ class Optimizer(metaclass=abc.ABCMeta):
 					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
 					with open(path_to_file, "wb") as f1:
 						pickle.dump(self.model, f1)
+					# evaluate model
+					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
+						pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+										 self.audio_dir, one_model=True)
+
+
+						f1.write("{},{}".format(pred_true,nmi))
+						f1.write("\n")
+						
 
 
 				# write to log
