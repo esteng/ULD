@@ -16,7 +16,7 @@ import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 # DEBUG = True
-DEBUG = True
+DEBUG = False
 # resume = "/Users/esteng/ULD/code/pkl_test/epoch-0-batch-0"
 resume=None
 import amdtk
@@ -75,8 +75,9 @@ print('Connected to', len(dview), 'jobs.')
 
 
 print("done importing!")
-audio_dir = '../audio/FAEM0'
 # audio_dir = '../audio/FAEM0'
+audio_dir = '../audio/icicles'
+
 
 audio_dir = os.path.abspath(audio_dir)
 
@@ -159,7 +160,7 @@ print("Creating VB optimizer...")
 optimizer = amdtk.NoisyChannelOptimizer(
     dview, 
     final_data_stats, 
-    args= {'epochs': 3,
+    args= {'epochs': 10,
      'batch_size': 4,
      'lrate': 0.01,
      'pkl_path': "models/",
@@ -175,6 +176,11 @@ optimizer.run(zipped_paths, callback)
 end = systime.time()
 print("VB optimization took ",end-begin," seconds.")
 
+print("***ELBO***")
+for i, n in enumerate(elbo):
+    print('Epoch '+str(i)+': ELBO='+str(n))
+
+
 # fig1 = figure(
 #     x_axis_label='time (s)', 
 #     y_axis_label='ELBO',
@@ -185,39 +191,39 @@ print("VB optimization took ",end-begin," seconds.")
 # fig1.line(x, elbo)
 #show(fig1)
 
-print("\nDECODING\n")
+# print("\nDECODING\n")
 
-date_string = systime.strftime("textgrids_%Y-%m-%d_%H:%M")
+# date_string = systime.strftime("textgrids_%Y-%m-%d_%H:%M")
 
-# Need to change this according to 
-samples_per_sec = 100
-
-
-for (fea_path, top_path) in zipped_paths:
+# # Need to change this according to 
+# samples_per_sec = 100
 
 
+# for (fea_path, top_path) in zipped_paths:
 
-    data = amdtk.read_htk(fea_path)
 
-    # Normalize the data
-    data_mean = np.mean(data)
-    data_var = np.var(data)
-    data = (data-data_mean)/np.sqrt(data_var)
 
-    # Read top PLU sequence from file
-    with open(top_path, 'r') as f:
-        topstring = f.read()
-        tops = topstring.strip().split(',')
-        tops = [int(x) for x in tops]
+#     data = amdtk.read_htk(fea_path)
 
-    #result = model.decode(data, tops, state_path=False)
-    #result_path = model.decode(data, tops, state_path=True)
-    (result_intervals, edit_path) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
+#     # Normalize the data
+#     data_mean = np.mean(data)
+#     data_var = np.var(data)
+#     data = (data-data_mean)/np.sqrt(data_var)
 
-    print("---")
-    print("Phone sequence for file", fea_path, ":")
-    print(result_intervals)
-    print(edit_path)
+#     # Read top PLU sequence from file
+#     with open(top_path, 'r') as f:
+#         topstring = f.read()
+#         tops = topstring.strip().split(',')
+#         tops = [int(x) for x in tops]
+
+#     #result = model.decode(data, tops, state_path=False)
+#     #result_path = model.decode(data, tops, state_path=True)
+#     (result_intervals, edit_path) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
+
+#     print("---")
+#     print("Phone sequence for file", fea_path, ":")
+#     print(result_intervals)
+#     print(edit_path)
 
     #print(result_intervals)
     
@@ -238,17 +244,17 @@ for (fea_path, top_path) in zipped_paths:
     # print_bar_graph(counts_by_duration)
 
 
-    write_textgrids = True
+    # write_textgrids = True
 
-    if write_textgrids:
-        output_dir = os.path.join(audio_dir, date_string)
-        if not os.path.isdir(output_dir):
-            os.mkdir(output_dir)
-        amdtk.utils.write_textgrid(result_intervals, 
-                                    samples_per_sec, 
-                                    os.path.join(output_dir, os.path.split(fea_path)[1][:-4]+'.TextGrid'))
+    # if write_textgrids:
+    #     output_dir = os.path.join(audio_dir, date_string)
+    #     if not os.path.isdir(output_dir):
+    #         os.mkdir(output_dir)
+    #     amdtk.utils.write_textgrid(result_intervals, 
+    #                                 samples_per_sec, 
+    #                                 os.path.join(output_dir, os.path.split(fea_path)[1][:-4]+'.TextGrid'))
 
-        print("Wrote textgrids to", output_dir)
+    #     print("Wrote textgrids to", output_dir)
 
 print("success")
 subprocess.Popen(['ipcluster' ,'stop', '--profile', 'default'])

@@ -363,12 +363,14 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		exp_llh = 0.
 		acc_stats = None
 		n_frames = 0
+		all_state_llh = None
 
-		for arg in args_list:
+
+		for index, arg in enumerate(args_list):
 
 			(data, tops) = arg
 
-			print('----- top sequence', tops, '. data len =', data.shape[0], '-----')
+			print('----- top sequence #', index, ':', tops, '. data len =', data.shape[0], '-----')
 
 			new_data = np.copy(data)
 			# Mean / Variance normalization.
@@ -382,10 +384,10 @@ class ToyNoisyChannelOptimizer(Optimizer):
 
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
-			print("max data")
-			print(np.max(new_data))
+			# print("max data")
+			# print(np.max(new_data))
 			s_stats = model.get_sufficient_stats(new_data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
+			posts, llh, new_acc_stats, state_llh = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
 
 			exp_llh += np.sum(llh)
 			n_frames += len(new_data)
@@ -394,7 +396,13 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			else:
 				acc_stats += new_acc_stats
 
-		return (exp_llh, acc_stats, n_frames) 
+			if all_state_llh is None:
+				all_state_llh = state_llh
+			else:
+				all_state_llh = np.vstack((all_state_llh, state_llh))
+
+		return (exp_llh, acc_stats, n_frames, all_state_llh)
+
 
 
 	def run(self, data, callback):
@@ -423,7 +431,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			#     model.pruning_threshold = self.pruning
 
 			# Perform one epoch of the training.
-			lower_bound = self.train(data, epoch+1, epoch+1)
+			lower_bound, state_llh = self.train(data, epoch+1, epoch+1)
 
 			# Monitor the convergence after each epoch.
 			args = {
@@ -434,6 +442,8 @@ class ToyNoisyChannelOptimizer(Optimizer):
 				'time': time.time() - start_time
 			}
 			callback(args)
+
+		return state_llh
 
 
 	def train(self, data_list, epoch, time_step):
@@ -456,15 +466,13 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
-
-		# for s in acc_stats._stats:
-		# 	print(s)
-
 		n_frames = stats_list[0][2]
-		for val1, val2, val3 in stats_list[1:]:
+		all_state_llh = stats_list[0][3]
+		for val1, val2, val3, val4 in stats_list[1:]:
 			exp_llh += val1
 			acc_stats += val2
 			n_frames += val3
+			all_state_llh = np.vstack((all_state_llh, val4))
 
 		kl_div = self.model.kl_div_posterior_prior()
 
@@ -478,7 +486,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
-		return (scale * exp_llh - kl_div) / self.data_stats['count']
+		return (scale * exp_llh - kl_div) / self.data_stats['count'], all_state_llh
 
 	@staticmethod
 	@interactive
@@ -491,23 +499,30 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		exp_llh = 0.
 		acc_stats = None
 		n_frames = 0
+		all_state_llh = None
 
 		for data, tops in [args_list]:
 			
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
+			posts, llh, new_acc_stats, state_llh = model.get_posteriors(s_stats, tops,
 															 accumulate=True, filename="test")
 
 			exp_llh += numpy.sum(llh)
 			n_frames += len(data)
+
 			if acc_stats is None:
 				acc_stats = new_acc_stats
 			else:
 				acc_stats += new_acc_stats
 
-		return (exp_llh, acc_stats, n_frames)
+			if all_state_llh is None:
+				all_state_llh = state_llh
+			else:
+				all_state_llh = np.vstack((all_state_llh, state_llh))
+
+		return (exp_llh, acc_stats, n_frames, all_state_llh)
 
 
 

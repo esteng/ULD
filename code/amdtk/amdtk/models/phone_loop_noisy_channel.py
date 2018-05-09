@@ -358,7 +358,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		retval = 0.
 		for i in range(len(self.op_latent_posteriors)):
 			retval += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i])
-		print("after adding op kls retval is ", retval)
+		# print("after adding op kls retval is ", retval)
 
 		for comp in self.components:
 			retval += comp.posterior.kl_div(comp.prior)
@@ -373,12 +373,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	# @profile(immediate=True)
 	def get_posteriors(self, s_stats, top_seq, accumulate=False,filename=None):
 		import time
-		print("max s_stats:")
-		print(np.max(s_stats))
+		# print("max s_stats:")
+		# print(np.max(s_stats))
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
 
-		print("max state_llh at {}:".format(time.clock()))
-		print(np.max(state_llh))
+		# print("max state_llh at {}:".format(time.clock()))
+		# print(np.max(state_llh))
 		# print(logsumexp(state_llh, axis=1))
 		# print(state_llh)
 		# The workhorse
@@ -421,7 +421,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 			# print("acc op stats: ", acc_stats._stats[-1])
 
-			return state_counts_perframe_normalized, state_norm[-1], acc_stats
+			return state_counts_perframe_normalized, state_norm[-1], acc_stats, state_llh
 
 		return state_counts_perframe_normalized, state_norm[-1]
 
@@ -442,11 +442,11 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				# print(op_count_i)
 				pass
 				# sys.exit()
-			if i == 1:
-				print("op count i:")
-				print(op_count_i)
-				print("log op count:")
-				print(np.log(op_count_i))
+			# if i == 1:
+				# print("op count i:")
+				# print(op_count_i)
+				# print("log op count:")
+				# print(np.log(op_count_i))
 				# print('======'+str(i)+'======\n')
 				# print('before update natural_params: '+str(self.op_latent_posteriors[i].natural_params))
 				# print('before update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition))
@@ -457,10 +457,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			op_grad = self.op_latent_priors[i].natural_params + op_count_i
 			op_grad = op_grad - self.op_latent_posteriors[i].natural_params
 			self.op_latent_posteriors[i].natural_params += lrate * op_grad
-			if i == 1:
-				print("normalized grad log partition in linear space after")
-				normed = np.exp(self.op_latent_posteriors[i].grad_log_partition - logsumexp(self.op_latent_posteriors[i].grad_log_partition))
-				print(normed)
+			# if i == 1:
+				# print("normalized grad log partition in linear space after")
+				# normed = np.exp(self.op_latent_posteriors[i].grad_log_partition - logsumexp(self.op_latent_posteriors[i].grad_log_partition))
+				# print(normed)
 			# print('after update natural_params: '+str(self.op_latent_posteriors[i].natural_params))
 			# print('after update grad_log_partition: '+str(self.op_latent_posteriors[i].grad_log_partition))
 
@@ -492,10 +492,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		frames_per_top = math.ceil(float(n_frames)/len(plu_tops))
 
-		print('self.max_slip_factor:', self.max_slip_factor)
-		print('len(plu_tops):', len(plu_tops))
-		print('max_slip:', max_slip)
-		print('frames_per_top:', frames_per_top)
+		# print('self.max_slip_factor:', self.max_slip_factor)
+		# print('len(plu_tops):', len(plu_tops))
+		# print('max_slip:', max_slip)
+		# print('frames_per_top:', frames_per_top)
 
 		# Calculate forward probabilities
 		forward_probs = {}
@@ -717,7 +717,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# print("asserting log_op_counts don't start as nan")
 		for i in range(len(log_op_counts)):
 			# see if these counts are nan 
-			print('log_op_counts[i]: ',log_op_counts[i])
+			# print('log_op_counts[i]: ',log_op_counts[i])
 			try:
 				assert(not np.any(np.isnan(log_op_counts[i])))
 			except AssertionError:
@@ -732,7 +732,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		end_item_fw_probs = [ forward_probs.get(x, float('-inf')) for x in end_items]
 		end_item_total = logsumexp(end_item_fw_probs)
 
-		print('end_item_total: ', end_item_total)
+		# print('end_item_total: ', end_item_total)
 
 
 		# print("Frames: "+str(n_frames)+"   Pb types: "+str(self.n_units)+"   Pt types: "+str(max(plu_tops)+1)+"   Pt indices: "+str(len(plu_tops)))
@@ -742,7 +742,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# 	f.write('forward_backward_noisy_channel\n')
 		# 	f.write('log_op_counts: '+str(log_op_counts)+'\n')
 		# 	f.write('log_state_counts: '+str(log_state_counts)+'\n')
-		# print("end item total: ", end_item_total)
+		print("end item total: ", end_item_total)
 
 		excessive_fw = np.array(excessive_fw) - end_item_total
 		excessive_bw = np.array(excessive_bw)- end_item_total
@@ -814,10 +814,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# print("starts in forward: ", len(fw_starts))
 		# print("starts in backward: ", len(bw_starts))
 
-		print('end items fw probs:', [ (x, forward_probs[x]) for x in end_items if x in forward_probs ])
-		print('start items bw probs:', [ (x, backward_probs[x]) for x in start_items if x in backward_probs ])
+		# print('end items fw probs:', [ (x, forward_probs[x]) for x in end_items if x in forward_probs ])
+		# print('start items bw probs:', [ (x, backward_probs[x]) for x in start_items if x in backward_probs ])
 
-		print("log_state_counts:", log_state_counts)
+		# print("log_state_counts:", log_state_counts)
 
 		print("log_op_counts:", log_op_counts)
 		print("log_op_counts_normalized:", log_op_counts_normalized)
@@ -926,20 +926,20 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			else:
 				log_prob_all_ops = self.renorms[plu_tops[plu_top_index+1]][plu_bottom_type]
 
-			prob_all_ops = np.exp(log_prob_all_ops)
-			prob_all_ops/= np.sum(prob_all_ops)
+			# prob_all_ops = np.exp(log_prob_all_ops)
+			# prob_all_ops/= np.sum(prob_all_ops)
 
-			prob_it = prob_all_ops[0]
-			prob_ib = prob_all_ops[1:self.n_units+1]
-			prob_sub = prob_all_ops[self.n_units + 1: ]
+			# prob_it = prob_all_ops[0]
+			# prob_ib = prob_all_ops[1:self.n_units+1]
+			# prob_sub = prob_all_ops[self.n_units + 1: ]
 
-			log_prob_it = np.log(prob_it)
-			log_prob_ib = np.log(prob_ib)
-			log_prob_sub = np.log(prob_sub)
-		# print('log_prob_ib')
-		# print(log_prob_ib)
-		# print('log_prob_sub')
-		# print(log_prob_sub)
+			# log_prob_it = np.log(prob_it)
+			# log_prob_ib = np.log(prob_ib)
+			# log_prob_sub = np.log(prob_sub)
+
+			log_prob_it = log_prob_all_ops[0]
+			log_prob_ib = log_prob_all_ops[1:self.n_units+1]
+			log_prob_sub = log_prob_all_ops[self.n_units + 1: ]
 
 		n_frames = state_llh.shape[0]
 
