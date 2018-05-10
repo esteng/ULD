@@ -359,7 +359,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return retval
 
 	# @profile(immediate=True)
-	def get_posteriors(self, s_stats, top_seq, accumulate=False,filename=None):
+	def get_posteriors(self, s_stats, top_seq, accumulate=False, filename=None, return_state_llh=False):
 		import time
 		# print("max s_stats:")
 		# print(np.max(s_stats))
@@ -416,8 +416,13 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				print("max at {}".format(np.argmax(op_counts_normalized[top_idx])))
 				print("---------------------------------------\n")
 
+			if return_state_llh:
+				return state_counts_perframe_normalized, state_norm[-1], acc_stats, state_llh
+
 			return state_counts_perframe_normalized, state_norm[-1], acc_stats
 
+		if return_state_llh:
+			state_counts_perframe_normalized, state_norm[-1], state_llh
 
 		return state_counts_perframe_normalized, state_norm[-1]
 
