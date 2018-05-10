@@ -1,9 +1,6 @@
-
 """
 Training algorithms vor various models.
-
 Copyright (C) 2017, Lucas Ondel
-
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation
 files (the "Software"), to deal in the Software without
@@ -11,10 +8,8 @@ restriction, including without limitation the rights to use, copy,
 modify, merge, publish, distribute, sublicense, and/or sell copies
 of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
-
 The above copyright notice and this permission notice shall be
 included in all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -23,7 +18,6 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
 """
 
 import abc
@@ -356,7 +350,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		self.lrate = float(args.get('lrate', 1))
 		self.dir_path = dir_path
 
-	def e_step_nonstatic(self, args_list):
+	def e_step_nonstatic(self, args_list, return_state_llh=False):
 
 
 		model = self.model
@@ -367,12 +361,11 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		n_frames = 0
 		all_state_llh = None
 
-
-		for index, arg in enumerate(args_list):
+		for arg in args_list:
 
 			(data, tops) = arg
 
-			print('----- top sequence #', index, ':', tops, '. data len =', data.shape[0], '-----')
+			print('----- top sequence', tops, '. data len =', data.shape[0], '-----')
 
 			new_data = np.copy(data)
 			# Mean / Variance normalization.
@@ -389,7 +382,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			# print("max data")
 			# print(np.max(new_data))
 			s_stats = model.get_sufficient_stats(new_data)
-			posts, llh, new_acc_stats, state_llh = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
+			posts, llh, new_acc_stats, state_llh = model.get_posteriors(s_stats, tops,accumulate=True, filename="test", return_state_llh=True)
 
 			exp_llh += np.sum(llh)
 			n_frames += len(new_data)
@@ -398,23 +391,25 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			else:
 				acc_stats += new_acc_stats
 
-			if all_state_llh is None:
-				all_state_llh = state_llh
-			else:
-				all_state_llh = np.vstack((all_state_llh, state_llh))
-
-		return (exp_llh, acc_stats, n_frames, all_state_llh)
-
+			if return_state_llh:
+				if all_state_llh is None:
+					all_state_llh = state_llh
+				else:
+					all_state_llh = np.vstack((all_state_llh, state_llh))
 
 
-	def run(self, data, callback):
+		if return_state_llh:
+			return (exp_llh, acc_stats, n_frames, all_state_llh) 
+		
+		return (exp_llh, acc_stats, n_frames) 
+
+
+	def run(self, data, callback, return_state_llh=False):
 		"""Run the Standard Variational Bayes training.
-
 		Parameters
 		----------
 		model : :class:`PhoneLoop`
 			Phone Loop model to train.
-
 		"""
 		start_time = time.time()
 		for epoch in range(self.epochs):
@@ -433,7 +428,10 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			#     model.pruning_threshold = self.pruning
 
 			# Perform one epoch of the training.
-			lower_bound, state_llh = self.train(data, epoch+1, epoch+1)
+			if return_state_llh:
+				lower_bound, state_llh = self.train(data, epoch+1, epoch+1, return_state_llh=True)
+			else:
+				lower_bound = self.train(data, epoch+1, epoch+1, return_state_llh=False)
 
 			# Monitor the convergence after each epoch.
 			args = {
@@ -445,10 +443,12 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			}
 			callback(args)
 
-		return state_llh
+
+		if return_state_llh:
+			return state_llh
 
 
-	def train(self, data_list, epoch, time_step):
+	def train(self, data_list, epoch, time_step, return_state_llh=False):
 
 		# Propagate the model to all the remote clients.
 		# self.dview.push({
@@ -463,18 +463,27 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		# Serial version
 		stats_list = []
 		# for pair in data_list:
-		stats_list.append(self.e_step_nonstatic(data_list))
+		stats_list.append(self.e_step_nonstatic(data_list, return_state_llh=return_state_llh))
 
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
 		n_frames = stats_list[0][2]
-		all_state_llh = stats_list[0][3]
-		for val1, val2, val3, val4 in stats_list[1:]:
-			exp_llh += val1
-			acc_stats += val2
-			n_frames += val3
-			all_state_llh = np.vstack((all_state_llh, val4))
+
+		if return_state_llh:
+			all_state_llh = stats_list[0][3]
+
+		if return_state_llh:
+			for val1, val2, val3, val4 in stats_list[1:]:
+				exp_llh += val1
+				acc_stats += val2
+				n_frames += val3
+				all_state_llh = np.vstack((all_state_llh, val4))
+		else:
+			for val1, val2, val3 in stats_list[1:]:
+				exp_llh += val1
+				acc_stats += val2
+				n_frames += val3
 
 		kl_div = self.model.kl_div_posterior_prior()
 
@@ -488,7 +497,10 @@ class ToyNoisyChannelOptimizer(Optimizer):
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
-		return (scale * exp_llh - kl_div) / self.data_stats['count'], all_state_llh
+		if return_state_llh:
+			return (scale * exp_llh - kl_div) / self.data_stats['count'], all_state_llh
+
+		return (scale * exp_llh - kl_div) / self.data_stats['count']
 
 	@staticmethod
 	@interactive
@@ -501,31 +513,20 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		exp_llh = 0.
 		acc_stats = None
 		n_frames = 0
-		all_state_llh = None
 
 		for data, tops in [args_list]:
 			
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
-			posts, llh, new_acc_stats, state_llh = model.get_posteriors(s_stats, tops,
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
 															 accumulate=True, filename="test")
 
 			exp_llh += numpy.sum(llh)
 			n_frames += len(data)
-
 			if acc_stats is None:
 				acc_stats = new_acc_stats
 			else:
 				acc_stats += new_acc_stats
 
-			if all_state_llh is None:
-				all_state_llh = state_llh
-			else:
-				all_state_llh = np.vstack((all_state_llh, state_llh))
-
-		return (exp_llh, acc_stats, n_frames, all_state_llh)
-
-
-
-
+		return (exp_llh, acc_stats, n_frames)
