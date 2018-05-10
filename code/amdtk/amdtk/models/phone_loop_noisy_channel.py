@@ -206,7 +206,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return state_llh, c_given_s_resps
 
 
-	def decode(self, data, plu_tops, state_path=False, phone_intervals=False, edit_ops=False, hmm_states=False, plus=True):
+	def decode(self, data, plu_tops, phone_intervals=False, edit_ops=False, hmm_states=False, plus=True):
 		s_stats = self.get_sufficient_stats(data)
 
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
@@ -343,20 +343,29 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		"""
 		#retval = DiscreteLatentModel.kl_div_posterior_prior(self)
 
-		retval = 0.
+		op_kl_div = 0.
 		for i in range(len(self.op_latent_posteriors)):
-			retval += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i])
+			print('    op dist', i, ', kl_div=', self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i]))
+			op_kl_div += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i], print_debug=True)
 		# print("after adding op kls retval is ", retval)
 
+		gauss_comp_kl_div = 0.
 		for comp in self.components:
-			retval += comp.posterior.kl_div(comp.prior)
+			gauss_comp_kl_div += comp.posterior.kl_div(comp.prior)
 
-
+		comp_choice_kl_div = 0.
 		for idx, post in enumerate(self.state_posteriors):
-			retval += post.kl_div(self.state_priors[idx])
+			comp_choice_kl_div += post.kl_div(self.state_priors[idx])
 
 
-		return retval
+		kl_div = op_kl_div + gauss_comp_kl_div + comp_choice_kl_div
+
+		print('  op_kl_div:', op_kl_div)
+		print('  gauss_comp_kl_div:', gauss_comp_kl_div)
+		print('  comp_choice_kl_div:', comp_choice_kl_div)
+		print('  kl_div:', kl_div)
+
+		return kl_div
 
 	# @profile(immediate=True)
 	def get_posteriors(self, s_stats, top_seq, accumulate=False, filename=None, return_state_llh=False):
@@ -749,7 +758,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		excessive_bw = np.array(excessive_bw)- end_item_total
 		excessive_fw_bw = np.array(excessive_fw_bw)- end_item_total
 
-		log_op_counts_normalized = log_op_counts - end_item_total
+		# Instead of doing the 'proper' normalization here which seems to be causing issues, let's do an approximation
+		# log_op_counts_normalized = log_op_counts - end_item_total
+		log_op_counts_normalized = log_op_counts - logsumexp(log_op_counts)
+		log_op_counts_normalized += math.log(float(len(plu_tops)))
 
 		# print("checking indices:")
 		assert(len(fw_pb_idxs ^ bw_pb_idxs) == 0)

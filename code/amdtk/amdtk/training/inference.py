@@ -34,25 +34,29 @@ from ..evals import avg_nmi
 class Optimizer(metaclass=abc.ABCMeta):
 
 	def __init__(self, dview, data_stats, args, model):
+
 		self.dview = dview
-		self.epochs = int(args.get('epochs', 1))
-		self.batch_size = int(args.get('batch_size', 2))
-		self.pkl_path = args.get("pkl_path", None)
-		self.audio_dir = args.get("audio_dir",None)
-		self.log_dir = args.get("log_dir", None)
-		if self.log_dir is not None:
-			self.log_file = self.log_dir  + "/" + time.strftime("opt_%Y-%m-%d_%H:%M.log")
-
-		# print("log dir: ", self.log_dir, "log file", self.log_file)
-		self.model = model
-		self.time_step = 0
-		self.data_stats = data_stats
-
 		with self.dview.sync_imports():
 			import numpy
 			from amdtk import read_htk
 			import _pickle as pickle
 			import os
+
+		self.epochs = int(args.get('epochs', 1))
+		self.batch_size = int(args.get('batch_size', 2))
+		self.audio_dir = args.get("audio_dir",None)
+		self.eval_audio_dir = args.get("audio_dir",self.audio_dir)
+		self.audio_samples_per_sec = args.get("audio_samples_per_sec",None)
+		self.output_dir = args.get("output_dir", None)
+		if self.output_dir is not None:
+			self.this_output_dir = os.path.join(self.output_dir, time.strftime("output_%Y-%m-%d_%H:%M:%S"))
+			os.makedirs(self.this_output_dir)
+			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
+			self.pkl_dir = os.path.join(self.this_output_dir, 'pkl')
+			os.makedirs(self.pkl_dir)
+		self.model = model
+		self.time_step = 0
+		self.data_stats = data_stats
 
 		self.dview.push({
 			'data_stats': data_stats
@@ -75,6 +79,9 @@ class Optimizer(metaclass=abc.ABCMeta):
 				batch_size = self.batch_size
 
 			for mini_batch in range(0, len(data), batch_size):
+
+				batch_num = int(mini_batch / batch_size) + 1
+
 				self.time_step += 1
 
 				# Index of the data mini-batch.
@@ -93,31 +100,21 @@ class Optimizer(metaclass=abc.ABCMeta):
 				objective = \
 					self.train(new_fea_list, epoch + 1, self.time_step)
 
-				# pickle model
-				if self.pkl_path is not None:
-					if not os.path.exists(self.pkl_path):
-						os.makedirs(self.pkl_path)
-					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
-					with open(path_to_file, "wb") as f1:
+				# print('scale: ', scale)
+				# print('exp_llh: ', exp_llh)
+				# print('kl_div: ', kl_div)
+				# print('count: ', count)
+
+
+
+				# write output files
+				if self.this_output_dir is not None:
+					print("Saving model to {}...".format(self.pkl_dir))
+					# pickle model
+					path_to_pkl_file = os.path.join(self.pkl_dir,"epoch-{}-batch-{}".format(epoch, mini_batch))
+					with open(path_to_pkl_file, "wb") as f1:
 						pickle.dump(self.model, f1)
-					# evaluate model
-					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
-						pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
-										 self.audio_dir, one_model=True)
-
-
-						f1.write("{},{}".format(pred_true,nmi))
-						f1.write("\n")
-						
-
-
-				# write to log
-				if self.log_dir is not None:
-
-					# print("writing to log file")
-					with open(self.log_file, "a") as f1:
-						f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective]]))
-						f1.write("\n")
+					
 				# Monitor the convergence.
 				callback({
 					'epoch': epoch + 1,
@@ -126,6 +123,19 @@ class Optimizer(metaclass=abc.ABCMeta):
 					'time': time.time() - start_time,
 					'objective': objective,
 				})
+
+			# evaluate model (only once per epoch)
+			if self.this_output_dir is not None:
+				pred_true,nmi = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
+						output_dir=self.this_output_dir, samples_per_sec=self.audio_samples_per_sec, one_model=True, write_textgrids=True)
+
+					
+
+				# write to log file
+				with open(self.log_file, "a") as f1:
+					f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective]]))
+					f1.write("\n")
+
 
 	@abc.abstractmethod
 	def train(self, data, epoch, time_step):
@@ -211,7 +221,8 @@ class StochasticVBOptimizer(Optimizer):
 		# print(kl_div)
 		# print("self.data_stats[count]")
 		# print(self.data_stats['count'])
-		return (scale * exp_llh - kl_div) / self.data_stats['count']
+
+		return scale, exp_llh, kl_div, self.data_stats['count'], (scale * exp_llh - kl_div) / self.data_stats['count']
 
 
 class NoisyChannelOptimizer(Optimizer):
@@ -226,8 +237,6 @@ class NoisyChannelOptimizer(Optimizer):
 	# def run(self, data, callback):
 
 	def e_step_nonstatic(self, args_list):
-
-		print("INSIDE ESTEP NONSTATIC")
 
 		model = self.model
 		data_stats = self.data_stats
@@ -273,13 +282,13 @@ class NoisyChannelOptimizer(Optimizer):
 
 
 		# Parallel accumulation of the sufficient statistics.
-		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-		                                fea_list)
+		# stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
+		#                                 fea_list)
 
 		# Serial version
-		# stats_list = []
-		# for pair in fea_list:
-		# 	stats_list.append(self.e_step_nonstatic(pair))
+		stats_list = []
+		for pair in fea_list:
+			stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		# Accumulate the results from all the jobs.
@@ -301,7 +310,16 @@ class NoisyChannelOptimizer(Optimizer):
 		acc_stats *= scale
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
-		return (scale * exp_llh - kl_div) / self.data_stats['count']
+		elbo = (scale * exp_llh - kl_div) / self.data_stats['count']
+
+		print('epoch: ', epoch)
+		print('scale: ', scale)
+		print('exp_llh: ', exp_llh)
+		print('kl_div: ', kl_div)
+		print('self.data_stats["count"]: ', self.data_stats['count'])
+		print('elbo: ', elbo)
+
+		return elbo
 
 
 	@staticmethod

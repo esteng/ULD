@@ -11,18 +11,24 @@ from bokeh.plotting import figure
 from bokeh.layouts import gridplot
 from ipyparallel import Client
 import _pickle as pickle
+import random
 
 import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 # DEBUG = True
-DEBUG = True
+DEBUG = False
 # resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
 resume = None
 train=True
 # resume=None
 import amdtk
 import subprocess
+
+# Set random seed
+myseed = 4
+np.random.seed(myseed)
+random.seed(myseed)
 
 
 # np.seterr(divide='warn', over='warn', under='warn', invalid='raise')
@@ -78,8 +84,9 @@ print('Connected to', len(dview), 'jobs.')
 
 print("done importing!")
 
-# audio_dir = '../audio/icicles'
-audio_dir = '../audio/FAEM0'
+#audio_dir = '../audio/icicles'
+#audio_dir = '../audio/FAEM0'
+audio_dir = '../audio/mini-timit'
 
 audio_dir = os.path.abspath(audio_dir)
 
@@ -108,7 +115,6 @@ zipped_paths = list(zip(sorted(fea_paths), sorted(top_paths)))
 assert(len(zipped_paths)>0)
 
 for path_pair in zipped_paths:
-    print(path_pair)
     assert(re.sub("\.fea", "", path_pair[0]) == re.sub("\.top", "", path_pair[1]))
 
 print("There are {} files".format(len(fea_paths)))
@@ -164,12 +170,13 @@ if train:
 	optimizer = amdtk.NoisyChannelOptimizer(
 	    dview, 
 	    data_stats, 
-	    args= {'epochs': 3,
+	    args= {'epochs': 5,
 	     'batch_size': 4,
 	     'lrate': 0.01,
-	     'pkl_path': "models/",
-	     'audio_dir': audio_dir,
-	     'log_dir': 'logs'},
+	     'output_dir': 'output',
+         'audio_dir': audio_dir,
+         'eval_audio_dir': audio_dir,
+         'audio_samples_per_sec': 100},
 	    model=model,
 
 	)
@@ -200,8 +207,7 @@ for i, n in enumerate(elbo):
 
 # date_string = systime.strftime("textgrids_%Y-%m-%d_%H:%M")
 
-# # Need to change this according to 
-# samples_per_sec = 100
+# # Need to change this according to input files
 
 
 # for (fea_path, top_path) in zipped_paths:
@@ -224,11 +230,11 @@ for i, n in enumerate(elbo):
     #result = model.decode(data, tops, state_path=False)
     #result_path = model.decode(data, tops, state_path=True)
     # (result_intervals, edit_path, hmm_i) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
-    (result_intervals, edit_path, _) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
-    print("---")
-    print("Phone sequence for file", fea_path, ":")
-    print(result_intervals)
-    print(edit_path)
+    # (result_intervals, edit_path, _) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
+    # print("---")
+    # print("Phone sequence for file", fea_path, ":")
+    # print(result_intervals)
+    # print(edit_path)
 
     #print(result_intervals)
     
