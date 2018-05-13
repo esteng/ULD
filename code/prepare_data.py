@@ -4,50 +4,138 @@ import subprocess
 import argparse 
 import textgrid as tg
 
-def convert_dir(src_path,  mfcc_dest, conf):
-    for root, dirs, files in os.walk(src_path):
-        for filename in files:
-            if filename.endswith(".wav") or filename.endswith(".WAV"):
-                src_path = os.path.join(root, filename)
-                mfcc(src_path, mfcc_dest, conf)
-            if filename.endswith(".TextGrid"):
-                src_path = os.path.join(root, filename)
-                print(filename)
-                get_textgrid(tg_path, mfcc_dest)
 
-def mfcc(src, dest, conf):
-    src_filename = re.sub("\.WAV", "", os.path.split(src)[-1])
-    speaker = os.path.split(os.path.split(src)[0])[-1]
-    dest_filename = os.path.join(dest,speaker, src_filename + ".fea")
-    print(dest_filename)
-    dir_path = os.path.split(dest_filename)[0]
-    if not os.path.exists(dir_path):
-        os.mkdir(dir_path)
-    subprocess.Popen(['hcopy', '-C', conf, src, dest_filename])
+timit_phone_symbols = [
+'b',
+'d',
+'g',
+'p',
+'t',
+'k',
+'bcl',
+'dcl',
+'gcl',
+'pcl',
+'tcl',
+'kcl',
+'dx',
+'q',
+'jh',
+'ch',
+'s',
+'sh',
+'z',
+'zh',
+'f',
+'th',
+'v',
+'dh',
+'m',
+'n',
+'ng',
+'em',
+'en',
+'eng',
+'nx',
+'',
+'l',
+'r',
+'w',
+'y',
+'hh',
+'hv',
+'el',
+'iy',
+'ih',
+'eh',
+'ey',
+'ae',
+'aa',
+'aw',
+'ay',
+'ah',
+'ao',
+'oy',
+'ow',
+'uh',
+'uw',
+'ux',
+'er',
+'ax',
+'ix',
+'axr',
+'ax-h' ]
 
-def get_textgrid(file,dest):
-    print(file)
-    filename = re.sub('\.TextGrid' , '', file)
-    print("filename: ", filename)
-    t = tg.TextGrid()
-    t.read(file)
-    phones = [x.mark for x in t.tiers[1]]
-    phone_to_int={}
-    int_to_phone={}
-    for i,phone in enumerate(set(phones)):
-        phone_to_int[phone] = i 
-        int_to_phone[i] = phone
-    with open(filename+".top", "w") as f1:
-        ints = [str(phone_to_int[phone]) for phone in phones]
-        f1.write(",".join(ints))
+timit_silence_symbols = [
+'',
+'sil',
+'pau',
+'epi',
+'h#',
+'sp'
+]
+
+phone_to_int = {}
+
+for i, phone in enumerate(timit_phone_symbols):
+	phone_to_int[phone] = i
+
+n_items = len(phone_to_int.items())
+for i, silence in enumerate(timit_silence_symbols):
+	phone_to_int[silence] = n_items
+
+
+
+
+def convert_dir(src_path,  output_path, conf):
+
+	phone_to_int = {}
+
+	for root, dirs, files in os.walk(src_path):
+		for filename in files:
+			if filename.lower().endswith(".wav"):
+				src_file = os.path.join(root, filename)
+				output_path_full = os.path.join(output_path, os.path.relpath(root, src_path))
+				wav_to_fea(src_file, output_path_full, conf)
+			if filename.lower().endswith(".textgrid"):
+				src_file = os.path.join(root, filename)
+				output_path_full = os.path.join(output_path, os.path.relpath(src_path, root))
+				textgrid_to_top(src_file, output_path_full)
+
+	print('\n'.join([ str(x) for x in phone_to_int.items() ]))
+
+def wav_to_fea(src, dest, conf):
+	src_filename = re.sub("\.WAV", "", os.path.split(src)[-1])
+	if not os.path.exists(dest):
+		os.makedirs(dest)
+	dest_path_full = os.path.join(dest, src_filename + ".fea")
+	subprocess.Popen(['hcopy', '-C', conf, src, dest_path_full])
+
+def textgrid_to_top(file, dest):
+	src_filename = re.sub('\.TextGrid' , '', file)
+	t = tg.TextGrid()
+	t.read(file)
+	phones = [x.mark.lower() for x in t.tiers[0]]
+	next_phone_num = len(phone_to_int.items())
+
+	dest_path_full = os.path.join(dest, src_filename + '.top')
+
+	with open(dest_path_full, "w") as f1:
+		ints = []
+		for phone in phones:
+			if phone in phone_to_int:
+				ints.append(str(phone_to_int[phone]))
+			else:
+				print(phone + " not in dict")
+		f1.write(",".join(ints))
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser()
 
-    parser.add_argument("src",  help="source of wav files")
-    parser.add_argument("dest",  help="desired location for mfcc feature files")
-    parser.add_argument("conf")
-    args = parser.parse_args()
-    print(args.src, args.dest)
-    convert_dir(args.src, args.dest, args.conf)
+	parser.add_argument("src",  help="source of wav files")
+	parser.add_argument("dest",  help="desired location for output files")
+	parser.add_argument("conf",  help="location of HCopy configuration file")
+	args = parser.parse_args()
+	print(args.src, args.dest)
+	convert_dir(args.src, args.dest, args.conf)
