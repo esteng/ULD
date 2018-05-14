@@ -34,24 +34,40 @@ def segmentation_performance(y_true_phones, y_pred_phones):
 			'f1':f1}
 
 
+
+def pred_to_true_clustering_all(true_utt, pred_utt):
+
+	true_list = []
+	_ = [ true_list.extend(x) for x in true_utt ]
+
+	pred_list = []
+	_ = [ pred_list.extend(x) for x in pred_utt ]
+
+	return sklearn.metrics.v_measure_score(true_list, pred_list)
+
+
 def pred_to_true_clustering(y_true_phones, y_pred_phones):
 	v_measures = []
 	for true, pred in zip(y_true_phones, y_pred_phones):
-		print("type of y pred is : ", type(y_pred_phones))
-		print("pred shape", )
 		v_measures.append(sklearn.metrics.v_measure_score(true, pred))
 	return sum(v_measures)/len(v_measures)
 
-# Converts frame-label sequence to a one-hot vector of boundary locations
-def seq_to_one_hot(sequence):
+# Converts frame-label sequences to a 1/0 vector of boundary locations
+def seq_to_bound(sequences):
 
-	one_hot = np.zeros_like(sequence, dtype=float)
+	boundaries = []
 
-	for i in range(1,len(sequence)):
-		if sequence[i] != sequence[i-1]:
-			one_hot[i] = 1
+	for seq in sequences:
 
-	return one_hot
+		bound = np.zeros_like(seq, dtype=float)
+
+		for i in range(1,len(seq)):
+			if seq[i] != seq[i-1]:
+				bound[i] = 1
+
+		boundaries.append(bound)
+
+	return boundaries
 
 
 def frame_scores(y_true_path, y_pred_path):
@@ -95,14 +111,14 @@ def tg_tier_to_one_hot(tier, l):
 	return vec
 
 
-def read_tg(path):
-	t = tg.TextGrid()
-	t.read(path)
-	# get phone tier
-	phones = t.getList("phones")[0]
-	print(t.__dict__)
-	audio_len = float(t.maxTime) - float(t.minTime)
-	return audio_len, phones
+# def read_tg(path):
+# 	t = tg.TextGrid()
+# 	t.read(path)
+# 	# get phone tier
+# 	phones = t.getList("phones")[0]
+# 	print(t.__dict__)
+# 	audio_len = float(t.maxTime) - float(t.minTime)
+# 	return audio_len, phones
 
 
 
@@ -111,7 +127,7 @@ def read_tg(path):
 if __name__ == '__main__':
 	tg_path = "/Volumes/data/corpora/Librispeech_360/30/30-4445-0000.TextGrid"
 	length, phones = read_tg(tg_path)
-	print(seg_to_one_hot(phones, length))
+	print(seq_to_bound(phones, length))
 
 	sanity_check = frame_scores("/Volumes/data/corpora/Librispeech_360/30/30-4445-0000.TextGrid", "/Volumes/data/corpora/Librispeech_360/30/30-4445-0000.TextGrid")
 	print("sanity_check: ", sanity_check)

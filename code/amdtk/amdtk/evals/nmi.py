@@ -1,4 +1,4 @@
-from sklearn.metrics.cluster import normalized_mutual_info_score
+from sklearn.metrics.cluster import normalized_mutual_info_score, adjusted_mutual_info_score
 import textgrid as tg 
 import numpy as np 
 import os
@@ -6,28 +6,28 @@ import sys
 import re
 
 
-def tg_to_cluster(tg_path, mapping=None):
-	grid = tg.TextGrid().read(tg_path)
-	phone_tier = None
-	for tier_name in ["phones", "Phones", "None"]:
-		try:
-			phone_tier = grid.getList(tier_name)[0]
-			break
-		except IndexError:
-			continue
-	if phone_tier == None:
-		print("Error: textgrid {} does not have a valid tier".format(tg_path))
-		sys.exit(1)
-	phone_list = []
-	for interval in phone_tier.intervals:
-		if mapping == None:
-			phone_type = interval.mark
-		else:
-			phone_type = mapping[interval.mark]
-		phone_duration = interval.end-interval.begin
-		n_phones = int(phone_duration/10)
-		phone_list.extend([phone_type]*n_phones)
-	return phone_list
+# def tg_to_cluster(tg_path, mapping=None):
+# 	grid = tg.TextGrid().read(tg_path)
+# 	phone_tier = None
+# 	for tier_name in ["phones", "Phones", "None"]:
+# 		try:
+# 			phone_tier = grid.getList(tier_name)[0]
+# 			break
+# 		except IndexError:
+# 			continue
+# 	if phone_tier == None:
+# 		print("Error: textgrid {} does not have a valid tier".format(tg_path))
+# 		sys.exit(1)
+# 	phone_list = []
+# 	for interval in phone_tier.intervals:
+# 		if mapping == None:
+# 			phone_type = interval.mark
+# 		else:
+# 			phone_type = mapping[interval.mark]
+# 		phone_duration = interval.end-interval.begin
+# 		n_phones = int(phone_duration/10)
+# 		phone_list.extend([phone_type]*n_phones)
+# 	return phone_list
 
 def nmi(true_list, pred_list):
 	"""
@@ -36,6 +36,38 @@ def nmi(true_list, pred_list):
 	true_list = [int(x) for x in true_list]
 	pred_list = [int(x) for x in pred_list]
 	return normalized_mutual_info_score(true_list, pred_list)
+
+def ami(true_list, pred_list):
+	"""
+	get the adjusted mutual information (correcting for agreement occuring by chance)
+	between the predicted and the true alignment 
+	"""
+	true_list = [int(x) for x in true_list]
+	pred_list = [int(x) for x in pred_list]
+	return adjusted_mutual_info_score(true_list, pred_list)
+
+
+def tot_ami(true_utt, pred_utt):
+
+	true_list = []
+	_ = [ true_list.extend(x) for x in true_utt ]
+
+	pred_list = []
+	_ = [ pred_list.extend(x) for x in pred_utt ]
+
+	return ami(true_list, pred_list)
+
+
+def tot_nmi(true_utt, pred_utt):
+
+	true_list = []
+	_ = [ true_list.extend(x) for x in true_utt ]
+
+	pred_list = []
+	_ = [ pred_list.extend(x) for x in pred_utt ]
+
+	return nmi(true_list, pred_list)
+
 
 
 def avg_nmi(all_true, all_pred):

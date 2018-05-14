@@ -73,7 +73,7 @@ class EFDPrior(PersistentModel, metaclass=abc.ABCMeta):
         """
         return self._grad_log_partition
 
-    def kl_div(self, dist):
+    def kl_div(self, dist, print_debug=False):
         """Kullback-Leibler divergence.
 
         Compute the Kullback-Leibler divergence between the current
@@ -100,11 +100,25 @@ class EFDPrior(PersistentModel, metaclass=abc.ABCMeta):
         # Log-partition of the current and given distributions.
         log_partition1 = self.log_partition
         log_partition2 = dist.log_partition
-        # Compute the KL divergence.
-        retval = (nparams1 - nparams2).dot(expected_value)
-        retval += log_partition2 - log_partition1
 
-        return retval
+
+        # Compute the KL divergence.
+        component_a = (nparams1 - nparams2).dot(expected_value)
+        component_b = log_partition2 - log_partition1
+
+        kl_div_result = component_a + component_b
+
+        if print_debug:
+            print('      nparams1:', nparams1)
+            print('      nparams2:', nparams2)
+            print('      expected_value:', expected_value)
+            print('      component_a:', component_a)
+            print('      log_partition1:', log_partition1)
+            print('      log_partition2:', log_partition2)
+            print('      component_b:', component_b)
+            print('      kl_div_result:', kl_div_result)
+
+        return kl_div_result
 
     # PersistentModel interface implementation.
     # -----------------------------------------------------------------

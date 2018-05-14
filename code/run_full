@@ -7,6 +7,6 @@ ipcluster start --profile default -n 4 --daemonize;
 sleep 10;
 echo "ENGINES STARTED";
 echo "RUNNING";
-python run_amdtk_nc.py | sed "s,\x1[Bb]\[[0-9;]*[a-zA-Z],,g" > debug.txt;
+python run_amdtk_nc.py 70 10 ../audio/TIMIT/FADG0 ../audio/TIMIT/FADG0 output/FADG0 | sed "s,\x1[Bb]\[[0-9;]*[a-zA-Z],,g" > debug.txt;
 echo "DONE";
 ipcluster stop;
