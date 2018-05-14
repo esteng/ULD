@@ -113,9 +113,12 @@ def run_amdtk_nc(num_bottom_plus, num_epochs, audio_dir, eval_dir, output_dir):
 	for path in fea_paths:
 		assert(os.path.exists(path))
 
+	print('fea_paths:', fea_paths)
+	print('top_paths:', top_paths)
+
 	zipped_paths = list(zip(sorted(fea_paths), sorted(top_paths)))
 
-	print(zipped_paths)
+	print('zipped_paths:', zipped_paths)
 
 	assert(len(zipped_paths)>0)
 
