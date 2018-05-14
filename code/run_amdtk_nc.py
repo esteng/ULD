@@ -100,6 +100,7 @@ def run_amdtk_nc(num_bottom_plus, num_epochs, audio_dir, eval_dir, output_dir):
 
 	for root, dirs, files in os.walk(audio_dir):
 		for file in files:
+			print('file:', file)
 			if file.lower().endswith(".fea"): 
 				fea_paths.append(os.path.join(root,file))
 			if file.lower().endswith(".top"):
