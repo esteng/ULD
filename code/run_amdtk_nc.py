@@ -17,8 +17,8 @@ import sys
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 # DEBUG = True
 DEBUG = True
-# resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
-resume = None
+resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
+# resume = None
 train=True
 # resume=None
 import amdtk
@@ -77,8 +77,8 @@ print('Connected to', len(dview), 'jobs.')
 
 
 print("done importing!")
-# audio_dir = '../audio/icicles'
-audio_dir = '../audio/FAEM0'
+audio_dir = '../audio/icicles'
+# audio_dir = '../audio/FAEM0'
 
 audio_dir = os.path.abspath(audio_dir)
 

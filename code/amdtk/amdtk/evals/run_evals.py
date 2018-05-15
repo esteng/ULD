@@ -61,7 +61,7 @@ def evaluate_model(model_dir, audio_dir, one_model = False):
 		# Decode the data using the model
 		for (fea_path, top_path, textgrid_path) in zipped_paths_list:
 
-			print("HELLO")
+			print("HELLO UPDATED FOR SUER")
 
 			data = read_htk(fea_path)
 
@@ -112,7 +112,9 @@ def evaluate_model(model_dir, audio_dir, one_model = False):
 		# return(segmentation_performance(true_frame_labels_all, pred_frame_labels_all),\
 		#  pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all),
 		#  avg_nmi(true_frame_labels_all, pred_frame_labels_all))
-		return(pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all), avg_nmi(true_frame_labels_all, pred_frame_labels_all))
+		return(segmentation_performance(true_frame_labels_all, pred_frame_labels_all), 
+			pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all), 
+			avg_nmi(true_frame_labels_all, pred_frame_labels_all))
 
 
 

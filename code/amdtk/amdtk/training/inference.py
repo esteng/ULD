@@ -108,11 +108,11 @@ class Optimizer(metaclass=abc.ABCMeta):
 						pickle.dump(self.model, f1)
 					# evaluate model
 					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
-						pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+						res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
 										 self.audio_dir, one_model=True)
 
 
-						f1.write("{},{}".format(pred_true,nmi))
+						f1.write("{},{},{}".format(res_dict['f1'], pred_true,nmi))
 						f1.write("\n")
 						
 
