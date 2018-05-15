@@ -1,9 +1,6 @@
-
 """
 Training algorithms vor various models.
-
 Copyright (C) 2017, Lucas Ondel
-
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation
 files (the "Software"), to deal in the Software without
@@ -11,10 +8,8 @@ restriction, including without limitation the rights to use, copy,
 modify, merge, publish, distribute, sublicense, and/or sell copies
 of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
-
 The above copyright notice and this permission notice shall be
 included in all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -23,7 +18,6 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
 """
 
 import abc
@@ -39,26 +33,30 @@ from ..evals import avg_nmi
 
 class Optimizer(metaclass=abc.ABCMeta):
 
-	def __init__(self, dview, data_stats, args, model):
+	def __init__(self, dview, data_stats, args, model, pkl_path = None):
+		self.pkl_path = pkl_path
 		self.dview = dview
-		self.epochs = int(args.get('epochs', 1))
-		self.batch_size = int(args.get('batch_size', 2))
-		self.pkl_path = args.get("pkl_path", None)
-		self.audio_dir = args.get("audio_dir",None)
-		self.log_dir = args.get("log_dir", None)
-		if self.log_dir is not None:
-			self.log_file = self.log_dir  + "/" + time.strftime("opt_%Y-%m-%d_%H:%M.log")
-
-		# print("log dir: ", self.log_dir, "log file", self.log_file)
-		self.model = model
-		self.time_step = 0
-		self.data_stats = data_stats
-
 		with self.dview.sync_imports():
 			import numpy
 			from amdtk import read_htk
 			import _pickle as pickle
 			import os
+
+		self.epochs = int(args.get('epochs', 1))
+		self.batch_size = int(args.get('batch_size', 2))
+		self.audio_dir = args.get("audio_dir",None)
+		self.eval_audio_dir = args.get("audio_dir",self.audio_dir)
+		self.audio_samples_per_sec = args.get("audio_samples_per_sec",None)
+		self.output_dir = args.get("output_dir", None)
+		if self.output_dir is not None:
+			self.this_output_dir = os.path.join(self.output_dir, time.strftime("output_%Y-%m-%d_%H:%M:%S"))
+			os.makedirs(self.this_output_dir)
+			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
+			self.pkl_dir = os.path.join(self.this_output_dir, 'pkl')
+			os.makedirs(self.pkl_dir)
+		self.model = model
+		self.time_step = 0
+		self.data_stats = data_stats
 
 		self.dview.push({
 			'data_stats': data_stats
@@ -81,6 +79,9 @@ class Optimizer(metaclass=abc.ABCMeta):
 				batch_size = self.batch_size
 
 			for mini_batch in range(0, len(data), batch_size):
+
+				batch_num = int(mini_batch / batch_size) + 1
+
 				self.time_step += 1
 
 				# Index of the data mini-batch.
@@ -108,22 +109,26 @@ class Optimizer(metaclass=abc.ABCMeta):
 						pickle.dump(self.model, f1)
 					# evaluate model
 					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
-						res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
-										 self.audio_dir, one_model=True)
+						# res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+										 # self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
 
+						nmi, ami, bound_prec, bound_rec, fval = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+										 self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
 
-						f1.write("{},{},{}".format(res_dict['f1'], pred_true,nmi))
+						f1.write("nmi,ami,prec,rec,f1\n")
+						f1.write("{},{},{},{},{}".format(nmi, ami, bound_prec, bound_rec, fval))
 						f1.write("\n")
 						
 
 
-				# write to log
-				if self.log_dir is not None:
-
-					# print("writing to log file")
-					with open(self.log_file, "a") as f1:
-						f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective]]))
-						f1.write("\n")
+				# write output files
+				if self.this_output_dir is not None:
+					print("Saving model to {}...".format(self.pkl_dir))
+					# pickle model
+					path_to_pkl_file = os.path.join(self.pkl_dir,"epoch-{}-batch-{}".format(epoch, mini_batch))
+					with open(path_to_pkl_file, "wb") as f1:
+						pickle.dump(self.model, f1)
+					
 				# Monitor the convergence.
 				callback({
 					'epoch': epoch + 1,
@@ -132,6 +137,19 @@ class Optimizer(metaclass=abc.ABCMeta):
 					'time': time.time() - start_time,
 					'objective': objective,
 				})
+
+			# evaluate model (only once per epoch)
+			# if self.this_output_dir is not None:
+			# 	pred_true,nmi = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
+			# 			output_dir=self.this_output_dir, samples_per_sec=self.audio_samples_per_sec, one_model=True, write_textgrids=True)
+
+					
+
+				# write to log file
+				with open(self.log_file, "a") as f1:
+					f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective]]))
+					f1.write("\n")
+
 
 	@abc.abstractmethod
 	def train(self, data, epoch, time_step):
@@ -217,13 +235,14 @@ class StochasticVBOptimizer(Optimizer):
 		# print(kl_div)
 		# print("self.data_stats[count]")
 		# print(self.data_stats['count'])
-		return (scale * exp_llh - kl_div) / self.data_stats['count']
+
+		return scale, exp_llh, kl_div, self.data_stats['count'], (scale * exp_llh - kl_div) / self.data_stats['count']
 
 
 class NoisyChannelOptimizer(Optimizer):
 
-	def __init__(self, dview, data_stats, args, model):
-		Optimizer.__init__(self, dview, data_stats, args, model)
+	def __init__(self, dview, data_stats, args, model, pkl_path):
+		Optimizer.__init__(self, dview, data_stats, args, model, pkl_path)
 		self.lrate = float(args.get('lrate', 1))
 
 
@@ -232,8 +251,6 @@ class NoisyChannelOptimizer(Optimizer):
 	# def run(self, data, callback):
 
 	def e_step_nonstatic(self, args_list):
-
-		print("INSIDE ESTEP NONSTATIC")
 
 		model = self.model
 		data_stats = self.data_stats
@@ -279,13 +296,13 @@ class NoisyChannelOptimizer(Optimizer):
 
 
 		# Parallel accumulation of the sufficient statistics.
-		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-		                                fea_list)
+		# stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
+		#                                 fea_list)
 
 		# Serial version
-		# stats_list = []
-		# for pair in fea_list:
-		# 	stats_list.append(self.e_step_nonstatic(pair))
+		stats_list = []
+		for pair in fea_list:
+			stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		# Accumulate the results from all the jobs.
@@ -307,7 +324,16 @@ class NoisyChannelOptimizer(Optimizer):
 		acc_stats *= scale
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
-		return (scale * exp_llh - kl_div) / self.data_stats['count']
+		elbo = (scale * exp_llh - kl_div) / self.data_stats['count']
+
+		print('epoch: ', epoch)
+		print('scale: ', scale)
+		print('exp_llh: ', exp_llh)
+		print('kl_div: ', kl_div)
+		print('self.data_stats["count"]: ', self.data_stats['count'])
+		print('elbo: ', elbo)
+
+		return elbo
 
 
 	@staticmethod
@@ -356,7 +382,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		self.lrate = float(args.get('lrate', 1))
 		self.dir_path = dir_path
 
-	def e_step_nonstatic(self, args_list):
+	def e_step_nonstatic(self, args_list, return_state_llh=False):
 
 
 		model = self.model
@@ -365,6 +391,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		exp_llh = 0.
 		acc_stats = None
 		n_frames = 0
+		all_state_llh = None
 
 		for arg in args_list:
 
@@ -387,7 +414,7 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			# print("max data")
 			# print(np.max(new_data))
 			s_stats = model.get_sufficient_stats(new_data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename="test")
+			posts, llh, new_acc_stats, state_llh = model.get_posteriors(s_stats, tops,accumulate=True, filename="test", return_state_llh=True)
 
 			exp_llh += np.sum(llh)
 			n_frames += len(new_data)
@@ -396,17 +423,25 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			else:
 				acc_stats += new_acc_stats
 
+			if return_state_llh:
+				if all_state_llh is None:
+					all_state_llh = state_llh
+				else:
+					all_state_llh = np.vstack((all_state_llh, state_llh))
+
+
+		if return_state_llh:
+			return (exp_llh, acc_stats, n_frames, all_state_llh) 
+		
 		return (exp_llh, acc_stats, n_frames) 
 
 
-	def run(self, data, callback):
+	def run(self, data, callback, return_state_llh=False):
 		"""Run the Standard Variational Bayes training.
-
 		Parameters
 		----------
 		model : :class:`PhoneLoop`
 			Phone Loop model to train.
-
 		"""
 		start_time = time.time()
 		for epoch in range(self.epochs):
@@ -425,7 +460,10 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			#     model.pruning_threshold = self.pruning
 
 			# Perform one epoch of the training.
-			lower_bound = self.train(data, epoch+1, epoch+1)
+			if return_state_llh:
+				lower_bound, state_llh = self.train(data, epoch+1, epoch+1, return_state_llh=True)
+			else:
+				lower_bound = self.train(data, epoch+1, epoch+1, return_state_llh=False)
 
 			# Monitor the convergence after each epoch.
 			args = {
@@ -438,7 +476,11 @@ class ToyNoisyChannelOptimizer(Optimizer):
 			callback(args)
 
 
-	def train(self, data_list, epoch, time_step):
+		if return_state_llh:
+			return state_llh
+
+
+	def train(self, data_list, epoch, time_step, return_state_llh=False):
 
 		# Propagate the model to all the remote clients.
 		# self.dview.push({
@@ -453,20 +495,27 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		# Serial version
 		stats_list = []
 		# for pair in data_list:
-		stats_list.append(self.e_step_nonstatic(data_list))
+		stats_list.append(self.e_step_nonstatic(data_list, return_state_llh=return_state_llh))
 
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
-
-		# for s in acc_stats._stats:
-		# 	print(s)
-
 		n_frames = stats_list[0][2]
-		for val1, val2, val3 in stats_list[1:]:
-			exp_llh += val1
-			acc_stats += val2
-			n_frames += val3
+
+		if return_state_llh:
+			all_state_llh = stats_list[0][3]
+
+		if return_state_llh:
+			for val1, val2, val3, val4 in stats_list[1:]:
+				exp_llh += val1
+				acc_stats += val2
+				n_frames += val3
+				all_state_llh = np.vstack((all_state_llh, val4))
+		else:
+			for val1, val2, val3 in stats_list[1:]:
+				exp_llh += val1
+				acc_stats += val2
+				n_frames += val3
 
 		kl_div = self.model.kl_div_posterior_prior()
 
@@ -479,6 +528,9 @@ class ToyNoisyChannelOptimizer(Optimizer):
 		print("datastats[count]: ", str(self.data_stats["count"]))
 
 		self.model.natural_grad_update(acc_stats, self.lrate)
+
+		if return_state_llh:
+			return (scale * exp_llh - kl_div) / self.data_stats['count'], all_state_llh
 
 		return (scale * exp_llh - kl_div) / self.data_stats['count']
 
@@ -510,7 +562,3 @@ class ToyNoisyChannelOptimizer(Optimizer):
 				acc_stats += new_acc_stats
 
 		return (exp_llh, acc_stats, n_frames)
-
-
-
-

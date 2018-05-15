@@ -12,6 +12,7 @@ setup(
         'amdtk',
         'amdtk/io',
         'amdtk/densities',
+        'amdtk/evals',
         'amdtk/models',
         'amdtk/training'
     ],
