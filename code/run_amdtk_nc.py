@@ -181,7 +181,7 @@ def run_amdtk_nc(num_bottom_plus, num_epochs, audio_dir, eval_dir, output_dir):
 			args= {'epochs': num_epochs,
 			 'batch_size': 4,
 			 'lrate': 0.01,
-			 'output_dir': 'output',
+			 'output_dir': output_dir,
 			 'audio_dir': audio_dir,
 			 'eval_audio_dir': audio_dir,
 			 'audio_samples_per_sec': 100},
