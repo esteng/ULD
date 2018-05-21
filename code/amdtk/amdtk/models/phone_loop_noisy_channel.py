@@ -346,7 +346,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		op_kl_div = 0.
 		for i in range(len(self.op_latent_posteriors)):
 			# print('    op dist', i, ', kl_div=', self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i]))
-			op_kl_div += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i], print_debug=False)
+			op_kl_div += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i])
 		# print("after adding op kls retval is ", retval)
 
 		gauss_comp_kl_div = 0.
@@ -491,7 +491,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.post_update()
 		self.update_renorms()
 
-
+	# @profile(immediate=True)
 	def forward_backward_noisy_channel(self, plu_tops, state_llh, file):
 
 		n_frames = state_llh.shape[0]
