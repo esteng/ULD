@@ -33,8 +33,8 @@ from ..evals import avg_nmi
 
 class Optimizer(metaclass=abc.ABCMeta):
 
-	def __init__(self, dview, data_stats, args, model):
-
+	def __init__(self, dview, data_stats, args, model, pkl_path = None):
+		self.pkl_path = pkl_path
 		self.dview = dview
 		with self.dview.sync_imports():
 			import numpy
@@ -105,11 +105,25 @@ class Optimizer(metaclass=abc.ABCMeta):
 				objective = \
 					self.train(new_fea_list, epoch + 1, self.time_step)
 
-				# print('scale: ', scale)
-				# print('exp_llh: ', exp_llh)
-				# print('kl_div: ', kl_div)
-				# print('count: ', count)
+				# pickle model
+				if self.pkl_path is not None:
+					if not os.path.exists(self.pkl_path):
+						os.makedirs(self.pkl_path)
+					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
+					with open(path_to_file, "wb") as f1:
+						pickle.dump(self.model, f1)
+					# evaluate model
+					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
+						# res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+										 # self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
 
+						nmi, ami, bound_prec, bound_rec, fval = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+										 self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+
+						f1.write("nmi,ami,prec,rec,f1\n")
+						f1.write("{},{},{},{},{}".format(nmi, ami, bound_prec, bound_rec, fval))
+						f1.write("\n")
+						
 
 				# Time since start
 				time_elapsed = time.time() - start_time
@@ -237,8 +251,8 @@ class StochasticVBOptimizer(Optimizer):
 
 class NoisyChannelOptimizer(Optimizer):
 
-	def __init__(self, dview, data_stats, args, model):
-		Optimizer.__init__(self, dview, data_stats, args, model)
+	def __init__(self, dview, data_stats, args, model, pkl_path):
+		Optimizer.__init__(self, dview, data_stats, args, model, pkl_path)
 		self.lrate = float(args.get('lrate', 1))
 
 
