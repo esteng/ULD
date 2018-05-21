@@ -33,8 +33,8 @@ from ..evals import avg_nmi
 
 class Optimizer(metaclass=abc.ABCMeta):
 
-	def __init__(self, dview, data_stats, args, model):
-
+	def __init__(self, dview, data_stats, args, model, pkl_path = None):
+		self.pkl_path = pkl_path
 		self.dview = dview
 		with self.dview.sync_imports():
 			import numpy
@@ -53,6 +53,11 @@ class Optimizer(metaclass=abc.ABCMeta):
 			os.makedirs(self.this_output_dir)
 			print("Created output directory at", self.this_output_dir)
 			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
+			with open(self.log_file, "w") as f1:
+				f1.write('epoch\tminibatch\telbo\ttime\n')
+			self.eval_file = os.path.join(self.this_output_dir, 'eval.log')
+			with open(self.eval_file, "w") as f1:
+				f1.write('nmi\tami\tbound_precision\tbound_recall\tbound_f1\n')
 			self.pkl_dir = os.path.join(self.this_output_dir, 'pkl')
 			os.makedirs(self.pkl_dir)
 		else:
@@ -103,40 +108,59 @@ class Optimizer(metaclass=abc.ABCMeta):
 				objective = \
 					self.train(new_fea_list, epoch + 1, self.time_step)
 
-				# print('scale: ', scale)
-				# print('exp_llh: ', exp_llh)
-				# print('kl_div: ', kl_div)
-				# print('count: ', count)
+				# pickle model
+				if self.pkl_path is not None:
+					if not os.path.exists(self.pkl_path):
+						os.makedirs(self.pkl_path)
+					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
+					with open(path_to_file, "wb") as f1:
+						pickle.dump(self.model, f1)
+					# evaluate model
+					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
+						# res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+										 # self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
 
+						nmi, ami, bound_prec, bound_rec, fval = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+										 self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+
+						f1.write("nmi,ami,prec,rec,f1\n")
+						f1.write("{},{},{},{},{}".format(nmi, ami, bound_prec, bound_rec, fval))
+						f1.write("\n")
+						
+
+				# Time since start
+				time_elapsed = time.time() - start_time
 
 
 				# write output files
-				if self.this_output_dir is not None:
+				if self.output_dir is not None:
 					print("Saving model to {}...".format(self.pkl_dir))
 					# pickle model
 					path_to_pkl_file = os.path.join(self.pkl_dir,"epoch-{}-batch-{}".format(epoch, mini_batch))
 					with open(path_to_pkl_file, "wb") as f1:
 						pickle.dump(self.model, f1)
+
+					# write to log file
+					with open(self.log_file, "a") as f1:
+						f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective, time_elapsed]]))
+						f1.write("\n")						
 					
 				# Monitor the convergence.
 				callback({
 					'epoch': epoch + 1,
 					'batch': int(mini_batch / batch_size) + 1,
 					'n_batch': int(np.ceil(len(data) / batch_size)),
-					'time': time.time() - start_time,
+					'time': time_elapsed,
 					'objective': objective,
 				})
 
 			# evaluate model (only once per epoch)
-			if self.this_output_dir is not None:
-				pred_true,nmi = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
+			if self.output_dir is not None:
+				eval_stats = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
 						output_dir=self.this_output_dir, samples_per_sec=self.audio_samples_per_sec, one_model=True, write_textgrids=True)
-
-					
-
-				# write to log file
-				with open(self.log_file, "a") as f1:
-					f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective]]))
+				# write to eval file
+				with open(self.eval_file, "a") as f1:
+					f1.write("\t".join([str(x) for x in eval_stats]))
 					f1.write("\n")
 
 
@@ -230,8 +254,8 @@ class StochasticVBOptimizer(Optimizer):
 
 class NoisyChannelOptimizer(Optimizer):
 
-	def __init__(self, dview, data_stats, args, model):
-		Optimizer.__init__(self, dview, data_stats, args, model)
+	def __init__(self, dview, data_stats, args, model, pkl_path):
+		Optimizer.__init__(self, dview, data_stats, args, model, pkl_path)
 		self.lrate = float(args.get('lrate', 1))
 
 
@@ -287,7 +311,6 @@ class NoisyChannelOptimizer(Optimizer):
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
 	                                 fea_list)
-
 		# Serial version
 		# stats_list = []
 		# for pair in fea_list:

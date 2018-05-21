@@ -1,8 +1,6 @@
 """
 Main class of the phone loop model.
-
 Copyright (C) 2017, Lucas Ondel
-
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the
 "Software"), to deal in the Software without restriction, including
@@ -10,10 +8,8 @@ without limitation the rights to use, copy, modify, merge, publish,
 distribute, sublicense, and/or sell copies of the Software, and to
 permit persons to whom the Software is furnished to do so, subject to
 the following conditions:
-
 The above copyright notice and this permission notice shall be included
 in all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -21,7 +17,6 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 """
 
 import numpy as np
@@ -62,16 +57,13 @@ class Ops(object):
 
 class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	"""Bayesian Phone Loop model with noisy channel addition.
-
 	Bayesian Phone Loop with a sequence of top-level PLUs
 	and a Dirichlet prior over edit operations.
-
 	"""
 
 
 	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var):
 		"""Create and initialize a Bayesian Phone Loop Model.
-
 		Parameters
 		----------
 		n_units : int
@@ -89,12 +81,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			Mean of the data set to train on.
 		var : numpy.ndarray
 			Variance of the data set to train on.
-
 		Returns
 		-------
 		model : :class:`PhoneLoop`
 			A new phone-loop model.
-
 		"""
 		tot_n_states = n_units * n_states
 		tot_comp = tot_n_states * n_comp_per_state
@@ -216,7 +206,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return state_llh, c_given_s_resps
 
 
-	def decode(self, data, plu_tops, state_path=False, phone_intervals=False, edit_ops=False, hmm_states=False, plus=True):
+	def decode(self, data, plu_tops, phone_intervals=False, edit_ops=False, hmm_states=False, plus=True):
 		s_stats = self.get_sufficient_stats(data)
 
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
@@ -346,32 +336,39 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	
 	def kl_div_posterior_prior(self):
 		"""Kullback-Leibler divergence between prior /posterior.
-
 		Returns
 		-------
 		kl_div : float
 			Kullback-Leibler divergence.
-
 		"""
 		#retval = DiscreteLatentModel.kl_div_posterior_prior(self)
 
-		retval = 0.
+		op_kl_div = 0.
 		for i in range(len(self.op_latent_posteriors)):
-			retval += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i])
+			# print('    op dist', i, ', kl_div=', self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i]))
+			op_kl_div += self.op_latent_posteriors[i].kl_div(self.op_latent_priors[i], print_debug=False)
 		# print("after adding op kls retval is ", retval)
 
+		gauss_comp_kl_div = 0.
 		for comp in self.components:
-			retval += comp.posterior.kl_div(comp.prior)
+			gauss_comp_kl_div += comp.posterior.kl_div(comp.prior)
 
-
+		comp_choice_kl_div = 0.
 		for idx, post in enumerate(self.state_posteriors):
-			retval += post.kl_div(self.state_priors[idx])
+			comp_choice_kl_div += post.kl_div(self.state_priors[idx])
 
 
-		return retval
+		kl_div = op_kl_div + gauss_comp_kl_div + comp_choice_kl_div
+
+		# print('  op_kl_div:', op_kl_div)
+		# print('  gauss_comp_kl_div:', gauss_comp_kl_div)
+		# print('  comp_choice_kl_div:', comp_choice_kl_div)
+		# print('  kl_div:', kl_div)
+
+		return kl_div
 
 	# @profile(immediate=True)
-	def get_posteriors(self, s_stats, top_seq, accumulate=False,filename=None):
+	def get_posteriors(self, s_stats, top_seq, accumulate=False, filename=None, return_state_llh=False):
 		import time
 		# print("max s_stats:")
 		# print(np.max(s_stats))
@@ -403,8 +400,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# #perframe_llh = logsumexp(log_state_counts.T, axis=1)
 		# data_llh = sum(perframe_llh)
 		# log_op_counts_normalized = [i - data_llh for i in log_op_counts]
-		print("op count shape")
-		print(log_op_counts_normalized.shape)
+		# print("op count shape")
+		# print(log_op_counts_normalized.shape)
 		op_counts_normalized = np.exp(log_op_counts_normalized)
 		# op_counts_normalized = [np.exp(i) for i in log_op_counts_normalized]
 
@@ -422,14 +419,19 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 			acc_stats = EFDStats(efdstats)
 
-			for top_idx in range(op_counts_normalized.shape[0]):
-				print('plu top index: {}'.format(top_idx))
-				print(op_counts_normalized[top_idx])
-				print("max at {}".format(np.argmax(op_counts_normalized[top_idx])))
-				print("---------------------------------------\n")
+			# for top_idx in range(op_counts_normalized.shape[0]):
+			# 	print('plu top index: {}'.format(top_idx))
+			# 	print(op_counts_normalized[top_idx])
+			# 	print("max at {}".format(np.argmax(op_counts_normalized[top_idx])))
+			# 	print("---------------------------------------\n")
+
+			if return_state_llh:
+				return state_counts_perframe_normalized, state_norm[-1], acc_stats, state_llh
 
 			return state_counts_perframe_normalized, state_norm[-1], acc_stats
 
+		if return_state_llh:
+			state_counts_perframe_normalized, state_norm[-1], state_llh
 
 		return state_counts_perframe_normalized, state_norm[-1]
 
@@ -740,23 +742,15 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		end_item_fw_probs = [ forward_probs.get(x, float('-inf')) for x in end_items]
 		end_item_total = logsumexp(end_item_fw_probs)
 
-		print('end_item_total: ', end_item_total)
-
-
-		# print("Frames: "+str(n_frames)+"   Pb types: "+str(self.n_units)+"   Pt types: "+str(max(plu_tops)+1)+"   Pt indices: "+str(len(plu_tops)))
-
-		# with open('logfile', 'a') as f:
-		# 	f.write('=====================\n')
-		# 	f.write('forward_backward_noisy_channel\n')
-		# 	f.write('log_op_counts: '+str(log_op_counts)+'\n')
-		# 	f.write('log_state_counts: '+str(log_state_counts)+'\n')
-		# print("end item total: ", end_item_total)
-
 		excessive_fw = np.array(excessive_fw) - end_item_total
 		excessive_bw = np.array(excessive_bw)- end_item_total
 		excessive_fw_bw = np.array(excessive_fw_bw)- end_item_total
 
-		log_op_counts_normalized = log_op_counts - end_item_total
+		# log_op_counts_normalized = log_op_counts - end_item_total
+
+		# Instead of doing the 'proper' normalization here which seems to be causing issues, let's do an approximation
+		log_op_counts_normalized = log_op_counts - logsumexp(log_op_counts)
+		log_op_counts_normalized += math.log(float(len(plu_tops)))
 
 		# print("checking indices:")
 		assert(len(fw_pb_idxs ^ bw_pb_idxs) == 0)
@@ -789,27 +783,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		bw_starts = bw_states  & set(start_items)
 
 		total_states = fw_states | bw_states
-		# print("total states: {}".format(len(total_states)))
-		# print("forward states: {}".format(len(fw_states)))
-		# print("backward states: {}".format(len(bw_states)))
-		# print("in forward but not backwards:")
-		# print(len(fw_states - bw_states))
-		# print("in backward but not forwards:")
-		# print(len(bw_states - fw_states))
-
-		# print("ends in forward: ", len(fw_ends))
-		# print("ends in backward: ", len(bw_ends))
-		# print("starts in forward: ", len(fw_starts))
-		# print("starts in backward: ", len(bw_starts))
-
-		# print('end items fw probs:', [ (x, forward_probs[x]) for x in end_items if x in forward_probs ])
-		# print('start items bw probs:', [ (x, backward_probs[x]) for x in start_items if x in backward_probs ])
-
-		# print("log_state_counts:", log_state_counts)
-
-		# print("log_op_counts:", log_op_counts)
-		# print("log_op_counts_normalized:", log_op_counts_normalized)
-
 
 		assert(not np.any(np.isnan(log_state_counts)))
 		assert(not np.any(np.isnan(log_op_counts_normalized)))
@@ -1055,6 +1028,3 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 					(p + state_llh[frame_index,(plu_bottom_type*self.n_states+hmm_state)] + log05)) for op in [Ops.IB, Ops.SUB]])
 
 		return prev_states
-
-
-

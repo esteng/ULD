@@ -1,0 +1,202 @@
+File type = "ooTextFile"
+Object class = "TextGrid"
+
+xmin = 0.0
+xmax = 4.765
+tiers? <exists>
+size = 1
+item []:
+	item [1]:
+		class = "IntervalTier"
+		name = "None"
+		xmin = 0.0
+		xmax = 4.765
+		intervals: size = 47
+			intervals [1]:
+				xmin = 0.0
+				xmax = 0.165
+				text = "h#"
+			intervals [2]:
+				xmin = 0.165
+				xmax = 0.234125
+				text = "r"
+			intervals [3]:
+				xmin = 0.234125
+				xmax = 0.3725
+				text = "ih"
+			intervals [4]:
+				xmin = 0.3725
+				xmax = 0.415625
+				text = "tcl"
+			intervals [5]:
+				xmin = 0.415625
+				xmax = 0.535625
+				text = "ch"
+			intervals [6]:
+				xmin = 0.535625
+				xmax = 0.5875
+				text = "dh"
+			intervals [7]:
+				xmin = 0.5875
+				xmax = 0.644125
+				text = "l"
+			intervals [8]:
+				xmin = 0.644125
+				xmax = 0.7575
+				text = "uh"
+			intervals [9]:
+				xmin = 0.7575
+				xmax = 0.84125
+				text = "kcl"
+			intervals [10]:
+				xmin = 0.84125
+				xmax = 0.89
+				text = "k"
+			intervals [11]:
+				xmin = 0.89
+				xmax = 0.99
+				text = "f"
+			intervals [12]:
+				xmin = 0.99
+				xmax = 1.083125
+				text = "axr"
+			intervals [13]:
+				xmin = 1.083125
+				xmax = 1.2125
+				text = "s"
+			intervals [14]:
+				xmin = 1.2125
+				xmax = 1.2978125
+				text = "pcl"
+			intervals [15]:
+				xmin = 1.2978125
+				xmax = 1.3130625
+				text = "p"
+			intervals [16]:
+				xmin = 1.3130625
+				xmax = 1.4945625
+				text = "aa"
+			intervals [17]:
+				xmin = 1.4945625
+				xmax = 1.532625
+				text = "dx"
+			intervals [18]:
+				xmin = 1.532625
+				xmax = 1.6175
+				text = "ix"
+			intervals [19]:
+				xmin = 1.6175
+				xmax = 1.675
+				text = "dcl"
+			intervals [20]:
+				xmin = 1.675
+				xmax = 1.691875
+				text = "d"
+			intervals [21]:
+				xmin = 1.691875
+				xmax = 1.775
+				text = "hv"
+			intervals [22]:
+				xmin = 1.775
+				xmax = 1.9816875
+				text = "ay"
+			intervals [23]:
+				xmin = 1.9816875
+				xmax = 2.16
+				text = "iy"
+			intervals [24]:
+				xmin = 2.16
+				xmax = 2.23
+				text = "n"
+			intervals [25]:
+				xmin = 2.23
+				xmax = 2.401875
+				text = "ih"
+			intervals [26]:
+				xmin = 2.401875
+				xmax = 2.5473125
+				text = "z"
+			intervals [27]:
+				xmin = 2.5473125
+				xmax = 2.6525
+				text = "ix"
+			intervals [28]:
+				xmin = 2.6525
+				xmax = 2.73
+				text = "n"
+			intervals [29]:
+				xmin = 2.73
+				xmax = 2.770625
+				text = "dcl"
+			intervals [30]:
+				xmin = 2.770625
+				xmax = 2.824375
+				text = "jh"
+			intervals [31]:
+				xmin = 2.824375
+				xmax = 3.0625
+				text = "ae"
+			intervals [32]:
+				xmin = 3.0625
+				xmax = 3.120625
+				text = "gcl"
+			intervals [33]:
+				xmin = 3.120625
+				xmax = 3.133625
+				text = "g"
+			intervals [34]:
+				xmin = 3.133625
+				xmax = 3.2565
+				text = "w"
+			intervals [35]:
+				xmin = 3.2565
+				xmax = 3.494375
+				text = "er"
+			intervals [36]:
+				xmin = 3.494375
+				xmax = 3.569375
+				text = "z"
+			intervals [37]:
+				xmin = 3.569375
+				xmax = 3.721875
+				text = "aa"
+			intervals [38]:
+				xmin = 3.721875
+				xmax = 3.8141875
+				text = "n"
+			intervals [39]:
+				xmin = 3.8141875
+				xmax = 3.8350625
+				text = "dh"
+			intervals [40]:
+				xmin = 3.8350625
+				xmax = 3.896875
+				text = "ax"
+			intervals [41]:
+				xmin = 3.896875
+				xmax = 4.025625
+				text = "s"
+			intervals [42]:
+				xmin = 4.025625
+				xmax = 4.0725
+				text = "ix"
+			intervals [43]:
+				xmin = 4.0725
+				xmax = 4.21625
+				text = "f"
+			intervals [44]:
+				xmin = 4.21625
+				xmax = 4.3729375
+				text = "aa"
+			intervals [45]:
+				xmin = 4.3729375
+				xmax = 4.4695625
+				text = "r"
+			intervals [46]:
+				xmin = 4.4695625
+				xmax = 4.5875
+				text = "ix"
+			intervals [47]:
+				xmin = 4.5875
+				xmax = 4.765
+				text = "h#"
