@@ -63,6 +63,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 
 	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var):
+		print("Creating Phone Loop Noisy Channel model...")
 		"""Create and initialize a Bayesian Phone Loop Model.
 		Parameters
 		----------
