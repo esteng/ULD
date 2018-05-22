@@ -573,26 +573,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 								fw_hmm_states |= {hmm_state}
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
 
-
-								
-
-								# curr_forward =  forward_arr[np.array(curr_state)]
-								# print("curr shape")
-								# print(curr_forward.shape)
-								# if curr_forward > neg_inf:
-								# 	nexts = self.next_states((curr_state, curr_forward), plu_tops, state_llh, max_slip, frames_per_top, log05, logging)
-								# 	for (next_state, prob) in nexts:
-								# 		if forward_arr[list(next_state)] > neg_inf:
-								# 			forward_arr[list(next_state)] = np.logaddexp(forward_arr[list(next_state)], prob)
-								# 		else:
-								# 			forward_arr[list(next_state)] = prob
-
 								if curr_state in forward_probs and forward_probs[curr_state] > neg_inf:
-
-									logging = (np.random.ranf() < 0)
-
-									if False:
-										rfile_lines.append(str(frame_index)+','+str(forward_probs[curr_state])+','+str(edit_op)+'\n')
 
 									nexts = self.next_states((curr_state, forward_probs[curr_state]), plu_tops, state_llh, max_slip, frames_per_top, log05, logging)
 									for (next_state, prob) in nexts:
@@ -600,12 +581,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 											forward_probs[next_state] = np.logaddexp(forward_probs[next_state], prob)
 										else:
 											forward_probs[next_state] = prob
-
-		# print("Number of frames:",n_frames)
-
-		if logging:
-			with open('rfile', 'a') as f:
-				f.write(''.join(rfile_lines))
 
 
 		# Calculate backward probabilities, and also sum forwards+backwards probabilities in the same pass
@@ -615,6 +590,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		excessive_fw = []
 		excessive_bw = []
 		excessive_fw_bw = []
+
+		# chart_log_probs = np.full((self.n_units, self.n_top_units), float('-inf'))
 
 		bw_pb_idxs = set()
 		bw_pt_idxs = set()
@@ -672,6 +649,11 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 							for hmm_state in hmm_range:
 								bw_hmm_states |= {hmm_state}
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
+
+								# if curr_state in forward_probs:
+									# # Fill in chart_log_probs
+									# chart_log_probs[plu_bottom_type, plu_tops[plu_top_index]] = np.logaddexp(chart_log_probs[plu_bottom_type, plu_tops[plu_top_index]], forward_probs[curr_state])
+
 								
 								if curr_state in backward_probs:
 
@@ -682,9 +664,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 											backward_probs[prev_state] = np.logaddexp(backward_probs[prev_state], prob)
 										else:
 											backward_probs[prev_state] = prob
-
-
-
 
 									# Sum forwards & backwards probabilities
 									if curr_state in forward_probs:
