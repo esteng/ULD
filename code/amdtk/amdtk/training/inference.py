@@ -51,6 +51,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 		if self.output_dir is not None:
 			self.this_output_dir = os.path.join(self.output_dir, time.strftime("output_%Y-%m-%d_%H:%M:%S"))
 			os.makedirs(self.this_output_dir)
+			print("Created output directory at", self.this_output_dir)
 			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
 			with open(self.log_file, "w") as f1:
 				f1.write('epoch\tminibatch\telbo\ttime\n')
@@ -59,6 +60,8 @@ class Optimizer(metaclass=abc.ABCMeta):
 				f1.write('nmi\tami\tbound_precision\tbound_recall\tbound_f1\n')
 			self.pkl_dir = os.path.join(self.this_output_dir, 'pkl')
 			os.makedirs(self.pkl_dir)
+		else:
+			print("No output directory specified; no output will be produced.")
 		self.model = model
 		self.time_step = 0
 		self.data_stats = data_stats
@@ -307,8 +310,7 @@ class NoisyChannelOptimizer(Optimizer):
 
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-		                                fea_list)
-
+	                                 fea_list)
 		# Serial version
 		# stats_list = []
 		# for pair in fea_list:
