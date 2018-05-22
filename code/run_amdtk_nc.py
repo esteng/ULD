@@ -19,9 +19,9 @@ import sys
 # sys.path.insert(0, './amdtk')
 # sys.path.append("/Users/Elias/ULD/code/amdtk")
 # DEBUG = True
-DEBUG = True
-resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
-# resume = None
+DEBUG = False
+# resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
+resume = None
 train=True
 # resume=None
 import amdtk
@@ -93,7 +93,7 @@ def run_amdtk_nc(num_bottom_plus, num_epochs, audio_dir, eval_dir, output_dir):
 
 	print("done importing!")
 
-	audio_dir = '../audio/icicles'
+	# audio_dir = '../audio/icicles'
 	#audio_dir = '../audio/FAEM0'
 	#audio_dir = '../audio/TIMIT/FAEM0'
 
