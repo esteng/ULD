@@ -63,7 +63,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 
 	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var):
-		print("Creating Phone Loop Noisy Channel model...")
 		"""Create and initialize a Bayesian Phone Loop Model.
 		Parameters
 		----------
@@ -228,25 +227,40 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		for (item, prob) in self.generate_start_items(plu_tops, state_llh):
 			forward_probs[item] = (prob, None)
 
-		for plu_bottom_index in range(-1,max_plu_bottom_index):
-			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
-			# print("len(forward_probs) = "+str(len(forward_probs)))
+		pb_upper_limit = len(plu_tops) + max_slip
+		pb_lower_limit = -1
+
+		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit):
+
 			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
 			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
-			for plu_top_index in range(pt_lower_limit, pt_upper_limit):
+			# pt_lower_limit = -1
+			# pt_upper_limit = len(plu_tops)
+
+			for plu_top_index in range(pt_lower_limit,pt_upper_limit):
+
 				for plu_bottom_type in range(self.n_units):
+
 					frame_lower_limit = max(-1, math.floor((plu_bottom_index-max_slip)*frames_per_top))
 					frame_upper_limit = min(n_frames, math.ceil((plu_bottom_index+max_slip)*frames_per_top))
-					for frame_index in range(frame_lower_limit, frame_upper_limit):
+					# frame_lower_limit = -1
+					# frame_upper_limit = n_frames-1
+
+					for frame_index in range(frame_lower_limit,frame_upper_limit):
+
 						for edit_op in Ops.CODES:
+
 							if edit_op == Ops.IT:
 								hmm_range = [self.n_states-1]
 							elif edit_op == Ops.IB or edit_op == Ops.SUB:
 								hmm_range = [0]
 							else:
 								hmm_range = range(self.n_states)
+
 							for hmm_state in hmm_range:
+
 								curr_state = (frame_index, hmm_state, plu_bottom_type, plu_bottom_index, edit_op, plu_top_index)
+
 								if curr_state in forward_probs:
 									nexts = self.next_states((curr_state, forward_probs[curr_state][0]), plu_tops, state_llh, max_slip, frames_per_top, log05, logging=False)
 
@@ -522,7 +536,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		log05 = math.log(0.5)
 
-		pb_upper_limit = len(plu_tops)-1 + max_slip
+		pb_upper_limit = len(plu_tops) + max_slip
 
 		rfile_lines = []
 
@@ -542,7 +556,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		# try no pruning
 
-		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit+1):
+		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit):
 			fw_pb_idxs |= {plu_bottom_index}
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
 			# print("len(forward_probs) = "+str(len(forward_probs)))
