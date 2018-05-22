@@ -247,7 +247,6 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		# return(segmentation_performance(true_frame_labels_all, pred_frame_labels_all),\
 		#  pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all),
 		#  avg_nmi(true_frame_labels_all, pred_frame_labels_all))
-# <<<<<<< HEAD
 # 		return(segmentation_performance(true_frame_labels_all, pred_frame_labels_all), 
 # 			pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all), 
 # 			avg_nmi(true_frame_labels_all, pred_frame_labels_all))
