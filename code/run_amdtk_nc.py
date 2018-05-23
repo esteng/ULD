@@ -16,9 +16,6 @@ import _pickle as pickle
 import random
 
 import sys
-# sys.path.insert(0, './amdtk')
-# sys.path.append("/Users/Elias/ULD/code/amdtk")
-# DEBUG = True
 DEBUG = True
 # resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
 resume = None
@@ -103,6 +100,10 @@ def run_amdtk_nc(num_bottom_plus, num_epochs, audio_dir, eval_dir, output_dir):
 
 	audio_dir = os.path.abspath(audio_dir)
 	print('audio dir:', audio_dir)
+	eval_dir = os.path.abspath(eval_dir)
+	print('eval dir:', eval_dir)
+	output_dir = os.path.abspath(output_dir)
+	print('output dir:', output_dir)
 
 	fea_paths = []
 	top_paths = []
@@ -185,7 +186,7 @@ def run_amdtk_nc(num_bottom_plus, num_epochs, audio_dir, eval_dir, output_dir):
 			args= {'epochs': num_epochs,
 			 'batch_size': 4,
 			 'lrate': 0.01,
-			 'output_dir': 'output',
+			 'output_dir': output_dir,
 			 'audio_dir': audio_dir,
 			 'eval_audio_dir': audio_dir,
 			 'audio_samples_per_sec': 100},

@@ -52,9 +52,17 @@ class Optimizer(metaclass=abc.ABCMeta):
 		if self.output_dir is not None:
 			self.this_output_dir = os.path.join(self.output_dir, time.strftime("output_%Y-%m-%d_%H:%M:%S"))
 			os.makedirs(self.this_output_dir)
+			print("Created output directory at", self.this_output_dir)
 			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
+			with open(self.log_file, "w") as f1:
+				f1.write('epoch\tminibatch\telbo\ttime\n')
+			self.eval_file = os.path.join(self.this_output_dir, 'eval.log')
+			with open(self.eval_file, "w") as f1:
+				f1.write('nmi\tami\tbound_precision\tbound_recall\tbound_f1\n')
 			self.pkl_dir = os.path.join(self.this_output_dir, 'pkl')
 			os.makedirs(self.pkl_dir)
+		else:
+			print("No output directory specified; no output will be produced.")
 		self.model = model
 		self.time_step = 0
 		self.data_stats = data_stats
@@ -121,34 +129,39 @@ class Optimizer(metaclass=abc.ABCMeta):
 						f1.write("\n")
 						
 
+				# Time since start
+				time_elapsed = time.time() - start_time
+
 
 				# write output files
-				if self.this_output_dir is not None:
+				if self.output_dir is not None:
 					print("Saving model to {}...".format(self.pkl_dir))
 					# pickle model
 					path_to_pkl_file = os.path.join(self.pkl_dir,"epoch-{}-batch-{}".format(epoch, mini_batch))
 					with open(path_to_pkl_file, "wb") as f1:
 						pickle.dump(self.model, f1)
+
+					# write to log file
+					with open(self.log_file, "a") as f1:
+						f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective, time_elapsed]]))
+						f1.write("\n")						
 					
 				# Monitor the convergence.
 				callback({
 					'epoch': epoch + 1,
 					'batch': int(mini_batch / batch_size) + 1,
 					'n_batch': int(np.ceil(len(data) / batch_size)),
-					'time': time.time() - start_time,
+					'time': time_elapsed,
 					'objective': objective,
 				})
 
 			# evaluate model (only once per epoch)
-			# if self.this_output_dir is not None:
-			# 	pred_true,nmi = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
-			# 			output_dir=self.this_output_dir, samples_per_sec=self.audio_samples_per_sec, one_model=True, write_textgrids=True)
-
-					
-
-				# write to log file
-				with open(self.log_file, "a") as f1:
-					f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective]]))
+			if self.output_dir is not None:
+				eval_stats = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
+						output_dir=self.this_output_dir, samples_per_sec=self.audio_samples_per_sec, one_model=True, write_textgrids=True)
+				# write to eval file
+				with open(self.eval_file, "a") as f1:
+					f1.write("\t".join([str(x) for x in eval_stats]))
 					f1.write("\n")
 
 
@@ -297,13 +310,12 @@ class NoisyChannelOptimizer(Optimizer):
 
 
 		# Parallel accumulation of the sufficient statistics.
-		# stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-		#                                 fea_list)
-
+		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
+	                                 fea_list)
 		# Serial version
-		stats_list = []
-		for pair in fea_list:
-			stats_list.append(self.e_step_nonstatic(pair))
+		# stats_list = []
+		# for pair in fea_list:
+		# 	stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		# Accumulate the results from all the jobs.

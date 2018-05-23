@@ -219,17 +219,18 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 			true_frame_labels_all.append(true_frame_labels)
 			edit_ops_all.append(edit_ops)
 
+			if write_textgrids:
+				tg_dir = os.path.join(model_output_dir, 'textgrids')
+				if not os.path.exists(tg_dir):
+					os.mkdir(tg_dir)
+				amdtk.utils.write_textgrid(phone_intervals, 
+										samples_per_sec, 
+										os.path.join(tg_dir, os.path.split(fea_path)[1][:-4]+'.TextGrid'))
+
 
 		pred_frame_labels_all = np.array(pred_frame_labels_all)
 		true_frame_labels_all = np.array(true_frame_labels_all)
 
-		if write_textgrids:
-			tg_dir = os.path.join(model_output_dir, 'textgrids')
-			if not os.path.exists(tg_dir):
-				os.mkdir(tg_dir)
-			amdtk.utils.write_textgrid(phone_intervals, 
-									samples_per_sec, 
-									os.path.join(tg_dir, os.path.split(fea_path)[1][:-4]+'.TextGrid'))
 
 		# Perform analyses
 
@@ -247,7 +248,6 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		# return(segmentation_performance(true_frame_labels_all, pred_frame_labels_all),\
 		#  pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all),
 		#  avg_nmi(true_frame_labels_all, pred_frame_labels_all))
-# <<<<<<< HEAD
 # 		return(segmentation_performance(true_frame_labels_all, pred_frame_labels_all), 
 # 			pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all), 
 # 			avg_nmi(true_frame_labels_all, pred_frame_labels_all))
@@ -359,8 +359,13 @@ def read_tg(path, n_frames):
 		try:
 			phone_tier = t.getList("Phones")[0]
 		except IndexError:
-			phone_tier = t.getList("None")[0]
-	#print(t.__dict__)
+			try:
+				phone_tier = t.getList("phone")[0]
+			except IndexError:
+				try:
+					phone_tier = t.getList("Phone")[0]
+				except IndexError:
+					phone_tier = t.getList("None")[0]
 	audio_len = float(t.maxTime) - float(t.minTime)
 	frame_length = audio_len/n_frames
 	
@@ -374,7 +379,7 @@ def read_tg(path, n_frames):
 		tg_frame_labels[frame_index] = interval_label
 		time += frame_length
 
-	tg_frame_labels = [phone_to_int[x] for x in tg_frame_labels]
+	tg_frame_labels = [phone_to_int[x.lower()] for x in tg_frame_labels]
 
 	return tg_frame_labels
 
