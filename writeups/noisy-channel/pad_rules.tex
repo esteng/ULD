@@ -1,0 +1,164 @@
+\documentclass[12pt,letterpaper]{article}
+\usepackage{amsmath}    
+\usepackage{amssymb}    
+\usepackage{amsthm} 
+\usepackage{array}
+\usepackage{tikz}
+\usepackage{mathtools}
+\usepackage{geometry, color, graphicx}
+\usepackage{enumerate}
+\usepackage{commath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{algorithm2e}
+\usepackage{tabularx}
+\newcommand{\myrule}[2]{\begin{tabular}{c}
+#1 \\
+\hline
+#2
+\end{tabular}}
+
+\newcommand{\toprulecomp}[7]{
+    $[#1, #2, #3, #4, #5, #6, #7 ]$
+}
+\newcommand{\botrulecomp}[7]{
+    $[#1, #2, #3, #4, #5, #6,$ \\
+    $#7 ]$
+}
+
+\begin{document}
+\section{Parsing-as-deduction rules for noisy channel}
+\subsection{Item format}
+Each item has the following entries. In general, numerical indices are denoted by lowercase letters and other entries are denoted by uppercase letters. 
+\begin{enumerate}
+\item frame index ($i, j, ...$)
+\item PLU-internal HMM state ($s \in \{start, mid, end\}$)
+\item PLU bottom type ($A, B, ...$)
+\item PLU bottom index ($a, b, ...$ )
+\item edit operation type ($E \in \{NONE, IB, IT, SUB\}$)
+\item PLU top index ($m, n, ...$)
+\item the probability of the item ($P$ or $P'$)
+\end{enumerate}
+
+\noindent We also assume the existence of the following functions:
+\begin{itemize}
+	\item $TOP(m)$ returns the type of the PLU at position $M$ in the top-level PLU sequence.
+	\item $p_{hmm}(s_1 \rightarrow s_2)$ returns the probability of transitioning from PLU-internal HMM state $s_1$ to $s_2$. This is always 0.5 under the current implementation.
+	\item $p_{op}(E)$ returns the probability of the given operation type ($\{IB, IT, SUB\}$).
+	\item $p_{ib}(A)$ returns the probability of the insert bottom operation for PLU $A$, given that $E=IB$.
+	\item $p_{it}(M)$ returns the probability of the insert top operation for PLU $M$, given that $E=IT$.
+	\item $p_{sub}(M,A)$ returns the probability of the substitute operation that substitutes PLU $A$ for PLU $M$, given that $E=SUB$.
+	\item $lh(A,s,i)$ returns the likelihood of state $s$ of PLU $A$ at frame $i$ (based on the audio input).
+\end{itemize}
+
+
+
+\subsection{Moves in Levenshtein matrix (PLU transitions)}
+\subsubsection{Insert Bottom}
+\myrule{
+    \toprulecomp{i}{end}{A}{a}{E}{m}{P}
+    }
+    {
+    \botrulecomp{i+1}{start}{B}{a+1}{IB}{m}{P' = P \cdot p_{hmm}(end \rightarrow start) \cdot p_{op}(IB) \cdot p_{ib}(B) \cdot lh(B,start,i+1)}
+}
+
+\subsubsection{Insert Top}
+\myrule{
+    \toprulecomp{i}{end}{A}{a}{E}{m}{P}
+    }
+    {
+    \botrulecomp{i}{end}{A}{a}{IT}{m+1}{P' = P \cdot p_{op}(IT) \cdot p_{it}(TOP(m+1))}
+    % NOTE TO ELIAS: I took out the likelihood factor here, because I don't think it makes sense, because a phone inserted on top has NO interaction with the audio data.
+} \\
+
+\subsubsection{Substitute}
+\myrule{
+    \toprulecomp{i}{end}{A}{a}{E}{m}{P}
+    }
+    {
+    \botrulecomp{i+1}{start}{B}{a+1}{SUB}{m+1}{P' = P \cdot p_{hmm}(end \rightarrow start) \cdot p_{op}(SUB) \cdot p_{sub}(TOP(m+1),B) \cdot lh(B,start,i+1)}
+}
+
+\subsection{PLU-internal transitions}
+
+\subsubsection{HMM-state-internal transition}
+
+\myrule{
+	\toprulecomp{i}{s}{A}{a}{E\in\{NONE,IB,SUB\}}{m}{P}
+	}
+	{
+	\botrulecomp{i+1}{s}{A}{a}{NONE}{m}{P'= P \cdot p_{hmm}(s \rightarrow s) \cdot lh(A,s,i+1)}
+	}
+	
+\subsubsection{PLU-internal HMM state transition}
+
+\myrule{
+	\toprulecomp{i}{s\in\{start,mid\}}{A}{a}{E\in\{NONE,IB,SUB\}}{m}{P}
+	}
+	{
+	\botrulecomp{i+1}{s+1}{A}{a}{NONE}{m}{P'= P \cdot p_{hmm}(s \rightarrow s+1) \cdot lh(A,s+1,i+1)}
+	}
+	
+\subsection{Start items}
+
+The start items are as follows:	
+
+\begin{itemize}
+\item \{\toprulecomp{\mathbf{i=0}}{start}{A}{\mathbf{a=0}}{IB}{\mathbf{m=-1}}{P= p_{op}(IB) \cdot p_{ib}(A) \cdot lh(A,start,0)}\},
+$\forall A\in \{\text{bottom-level PLUs}\}$
+
+\item \{\toprulecomp{\mathbf{i=-1}}{end}{A}{\mathbf{a=-1}}{IT}{\mathbf{m=0}}{P= p_{op}(IT) \cdot p_{it}(TOP(0))}\}
+
+\item \{\toprulecomp{\mathbf{i=0}}{start}{A}{\mathbf{a=0}}{SUB}{\mathbf{m=0}}{P= p_{op}(SUB) \cdot p_{sub}(TOP(0),A) \cdot lh(A,start,0)}\}, \newline
+$\forall A\in \{\text{bottom-level PLUs}\}$
+\end{itemize}
+	
+\subsection{Completion rules}
+
+The parse is complete when any item of the following is reached, where $x$ is the number of frames in the audio input and $y$ is the number of PLUs in the top-level sequence.
+
+\begin{itemize}
+\item \{\toprulecomp{\mathbf{i=n}}{end}{A}{a}{E}{\mathbf{m=y}}{P}\}, $\forall A\in \{\text{bottom-level PLUs}\}, 1\leq a\leq max\_bottom$
+\end{itemize}
+
+\section{Implementation details}
+
+\subsection{Iteration order}
+
+Iterating through the items in a correct order, such that all items from which item $x$ is reachable are completed before item $x$ is entered, is nontrivial.
+
+As a starting point for thinking about ordering, below is a list of all items from which item $x=$\toprulecomp{i}{s}{A}{a}{E}{m}{P} is reachable, and thus must be completed before $x$ is entered, given certain conditions on the parameters. \\
+
+\noindent\begin{tabular}{ p{5.6cm} p{6cm} l }
+  Item & Conditions & Transition type \\\hline
+  \toprulecomp{i-1}{end}{B}{a-1}{E'}{m}{P'} & if $E=IB,s=start$ & Insert-bottom operation \\
+  \toprulecomp{i}{end}{A}{a}{E'}{m-1}{P'} & if $E=IT,s=end$ & Insert-top operation \\
+  \toprulecomp{i-1}{end}{B}{a-1}{E'}{m-1}{P'} & if $E=SUB$,$s=start$ & Substitute operation \\
+  \toprulecomp{i-1}{s}{A}{a}{NONE}{m}{P'} & if $E\in\{NONE,IB,SUB\}$ & PLU-internal HMM self-transition \\
+  \toprulecomp{i-1}{s-1}{A}{a}{NONE}{m}{P'} & if $E\in\{NONE,IB,SUB\}$,$s\in\{mid,end\}$ & PLU-internal HMM transition \\
+\end{tabular}
+
+\subsection{Time complexity analysis}
+
+The unpruned chart, under the 3-state-HMM implementation, has the following dimensionality.
+
+\noindent\begin{tabular}{ l l l }
+  Dimension & Length & Typical value for a 15-second utterance \\\hline
+  Number of frames & $i$ & 1500 \\
+  HMM state & 3 (constant) & 3 \\
+  Number of PLU bottom types & $A$ & 50 \\
+  Number of PLU bottom indices & $a$ & 130 \\
+  Number of edit operation types & 4 (constant) & 4 \\
+  Number of PLU top indices & $m$ & 120\\
+\end{tabular} \\
+
+\noindent Full chart contains $n = O(i \times 3 \times A \times a \times 4 \times m) = O(iAam)$ items. However:
+\begin{itemize}
+	\item The number of PLU top indices has an approximately linear relationship with the number of frames (and is upper bounded by it). We can express this as $m=O(i)$.
+	\item Likewise, the number of PLU bottom indices also has an approximately linear relationship with $i$, so $a=O(i)$. 
+	\item Therefore, $n=O(Ai^3)$. In other words, the number of chart items grows as the cube of the number of frames and linearly as the number of PLU bottom types.
+\end{itemize}
+
+\noindent Full chart for a typical 15-second utterance contains approximately $1.4 \times 10^{10}$ items.
+
+\end{document}

@@ -1,0 +1,40 @@
+\documentclass[12pt,letterpaper]{article}
+\usepackage[ruled, vlined]{algorithm2e}
+\begin{document}
+
+Input:
+\begin{enumerate}
+\item $\alpha$: $1\times 3$, operation hyperparameter
+\item $\rho$: $1\times k$, insert bottom hyperparameter
+\item $\phi$: $k\times k$, substitution hyperparameter
+\item $T$: set of top-level strings
+\end{enumerate}
+
+\begin{algorithm}[H]
+draw the operation probability  $\beta \sim Dir(\alpha)$ \\
+draw the insert bottom probability $\omega \sim Dir(\rho)$\\
+\For{$i\in \{1,\ldots, k\}$}{
+     draw $\lambda_i \sim Dir(\phi_i)$ 
+}
+\For{utterance $u \in T$}{
+    \For{top PLU $t \in u$}{
+        draw an operation $o \sim Cat(\beta)$\\
+        \If{$o$ is insert bottom}{
+            draw bottom-level PLU $x \sim Cat(\omega)$ \\
+            do not advance $t$ 
+        }
+        \If{$o$ is substitute}{
+            draw bottom-level PLU $x \sim Cat(\lambda_t)$ 
+        }
+        \If{$o$ is insert top}{
+            do nothing
+        }
+
+    }
+}
+
+\caption{noisy channel generative model}
+\end{algorithm}
+
+
+\end{document}

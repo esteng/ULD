@@ -1,0 +1,8 @@
+numpy
+scipy
+bokeh
+ipyparallel
+textgrid
+theano
+matplotlib
+librosa

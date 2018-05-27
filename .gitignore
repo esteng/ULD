@@ -14,3 +14,10 @@ writeups/noisy-channel/noisy-channel.fdb_latexmk
 writeups/noisy-channel/noisy-channel.fls
 writeups/thesis/thesis.fdb_latexmk
 writeups/thesis/thesis.fls
+writeups/MTL-AI-abstract/abstract.dvi
+
+# Ignore __pycache__ directories
+/**/__pycache__/
+
+# Ignore textgrids directories
+/**/textgrids*
