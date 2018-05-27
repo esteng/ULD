@@ -173,7 +173,7 @@ def run_amdtk_nc(num_bottom_plus, num_epochs, audio_dir, eval_dir, output_dir):
 			n_comp_per_state=4,   # number of Gaussians per emission
 			n_top_units=num_tops, # size of top PLU alphabet
 			mean=np.zeros_like(final_data_stats['mean']), 
-			var=np.ones_like(final_data_stats['var']),
+			var=np.ones_like(final_data_stats['var']/100),
 			max_slip_factor=.1
 		)
 		 
