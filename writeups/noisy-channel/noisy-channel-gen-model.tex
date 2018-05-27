@@ -1,0 +1,80 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.5in]{geometry}
+\setlength\parindent{0pt}
+\setlength\parskip{0.2cm}
+\usepackage{amsmath}
+\usepackage{bm}
+
+\newcommand{\bs}{\boldsymbol}
+\newcommand{\myindent}{\hspace{2cm}}
+
+
+\begin{document}
+
+\begin{center}
+	
+	{\Large \textbf{Noisy channel generative model}}
+
+	{\normalsize Emily Kellison-Linn, Tim O'Donnell, Elias Stengel-Eskin}
+			
+\end{center}
+
+\section{Model hyperparameters}
+
+We define a set of top-level PLUs $U_T$, a set of bottom-level PLUs $U_B$, a number of HMM states per bottom PLU $n_h$, a number of Gaussian components per HMM state $n_g$, and a dimensionality for the Gaussian distributions $n_d$.
+
+\section{Model parameters}
+
+\begin{enumerate}
+
+\item Draw distributions $E$ over edit operations conditioned on the next top level PLU $q$ for each top PLU from a Dirichlet distribution with parameters $\bs{\alpha_q}$:
+
+\myindent $E_q \sim D(\bs{\alpha_{q}}) ~ \forall q \in U_T$
+
+\item Draw distributions $C$ over Gaussian component selection for each HMM state $s$ for each bottom-level PLU from a Dirichlet distribution with parameters $\bs{\alpha_{s}}$:
+
+\myindent $C_{s} \sim D(\bs{\alpha_{s}}) ~ \forall s \in all\_HMM\_states$
+
+\item Draw $n_d$-dimensional Gaussian distributions with mean $\mu$ and covariance matrix $\Sigma$ for each Gaussian component $c$ for each HMM state for each bottom-level PLU from a Normal-Gamma distribution:
+
+\myindent $\mu_c, \Sigma_c \sim NormalGamma(\mu'_c, \lambda_c, \alpha_c, \beta_c)$
+
+\end{enumerate}
+
+\section{Generative process}
+
+\begin{enumerate}
+
+\item Start with a given sequence of of top-level PLUs, $a_1, a_2, ... a_{N_{top}}$, where $a_i \in U_T \forall i$.
+
+\item For $i$ in range $1...N_{top}$:
+\begin{enumerate}
+	\item Sample an edit operation $e$ from $E_{a_i}$.
+	\item If $e = insert\_bottom(r)$ for some $r \in U_B$, append $r$ to the list of bottom PLUs.
+	\item if $e = insert\_top(a_i)$, set $i=i+1$.
+	\item If $e = substitute(a_i,r)$ for some $r \in U_B$, append $r$ to the list of bottom PLUs and set $i=i+1$.
+\end{enumerate}
+
+The result is a sequence of bottom-level PLUs $b_1,...b_{N_{bot}}$ where $b_i \in U_B \forall i$.
+
+\item For each bottom PLU $b_i$ in the bottom-level sequence:
+\begin{enumerate}
+\item Sample an HMM state sequence $s_1,...s_{N_states}$through $b_i$ with all initial probability on the first state $s=1$ and transition matrix $M$, where $m_{x,y}=P(s_{t+1}=y|s_t=x)$ and $|M|=(n_h,n_h)$:
+
+\myindent $M_{x,x}=0.5$
+
+\myindent $M_{x,x+1}=0.5$
+
+\end{enumerate}
+
+\item For each HMM state $s$ in the HMM state sequence: 
+\begin{enumerate}
+\item Sample a Gaussian component $c$ from $C_s$
+
+\item Sample an $n_d$-dimensional vector from the Gaussian distribution with mean $\mu_c$ and covariance matrix $\Sigma_c$.
+
+\end{enumerate}
+
+\end{enumerate}
+
+\end{document}
