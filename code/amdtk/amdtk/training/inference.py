@@ -36,11 +36,12 @@ class Optimizer(metaclass=abc.ABCMeta):
 	def __init__(self, dview, data_stats, args, model, pkl_path = None):
 		self.pkl_path = pkl_path
 		self.dview = dview
-		with self.dview.sync_imports():
-			import numpy
-			from amdtk import read_htk
-			import _pickle as pickle
-			import os
+		if dview is not None:
+			with self.dview.sync_imports():
+				import numpy
+				from amdtk import read_htk
+				import _pickle as pickle
+				import os
 
 		self.epochs = int(args.get('epochs', 1))
 		self.batch_size = int(args.get('batch_size', 2))
@@ -65,10 +66,10 @@ class Optimizer(metaclass=abc.ABCMeta):
 		self.model = model
 		self.time_step = 0
 		self.data_stats = data_stats
-
-		self.dview.push({
-			'data_stats': data_stats
-		})
+		if self.dview is not None:
+			self.dview.push({
+				'data_stats': data_stats
+			})
 
 	def run(self, data, callback):
 		import _pickle as pickle
