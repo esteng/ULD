@@ -21,3 +21,7 @@ writeups/MTL-AI-abstract/abstract.dvi
 
 # Ignore textgrids directories
 /**/textgrids*
+
+writeups/noisy-channel/noisy-channel.pdf
+writeups/noisy-channel/pad_rules.fdb_latexmk
+writeups/noisy-channel/pad_rules.fls
