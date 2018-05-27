@@ -10,3 +10,7 @@ writeups/MTL-AI-abstract/abstract.pdf
 # Ignore search index files generated on Mac
 *.DS_Store
 writeups/MTL-AI-abstract/abstract.dvi
+writeups/noisy-channel/noisy-channel.fdb_latexmk
+writeups/noisy-channel/noisy-channel.fls
+writeups/thesis/thesis.fdb_latexmk
+writeups/thesis/thesis.fls
