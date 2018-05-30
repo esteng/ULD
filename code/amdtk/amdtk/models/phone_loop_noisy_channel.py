@@ -490,7 +490,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		state_stats = acc_stats[0]
 		gauss_stats = acc_stats[1]
 		op_counts = acc_stats[2:self.n_top_units+2]
-		assert(len(op_counts) == 4)
 		cond_op_counts = np.array(acc_stats[self.n_top_units+2:]).reshape((self.n_top_units, self.n_top_units, 2*self.n_units + 1))
 
 		# Update edit op counts for each top PLU

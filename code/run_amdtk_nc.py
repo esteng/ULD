@@ -17,9 +17,10 @@ import random
 
 import sys
 DEBUG = True
-# resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
-resume = None
-train=True
+resume = "/Users/Elias/ULD/code/models/epoch-0-batch-0"
+# resume = None
+# train=True
+train=False
 # resume=None
 import amdtk
 import subprocess
@@ -340,8 +341,30 @@ if train:
 	print("VB optimization took ",end-begin," seconds.")
 
 print("***ELBO***")
+
 for i, n in enumerate(elbo):
 	print('Epoch '+str(i)+': ELBO='+str(n))
 
+for (fea_path, top_path) in zipped_paths:
+	data = amdtk.read_htk(fea_path)
 
+	# Normalize the data
+	data_mean = np.mean(data)
+	data_var = np.var(data)
+	data = (data-data_mean)/np.sqrt(data_var)
+
+	# Read top PLU sequence from file
+	with open(top_path, 'r') as f:
+		topstring = f.read()
+		tops = topstring.strip().split(',')
+		tops = [int(x) for x in tops]
+
+	#result = model.decode(data, tops, state_path=False)
+	#result_path = model.decode(data, tops, state_path=True)
+	(result_intervals, edit_path, _) = model.decode(data, tops, phone_intervals=True, edit_ops=True)
+
+	print("---")
+	print("Phone sequence for file", fea_path, ":")
+	print(result_intervals)
+	print(edit_path)
 
