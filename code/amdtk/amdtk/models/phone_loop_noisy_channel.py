@@ -62,7 +62,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	"""
 
 
-	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var):
+	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var, extra_cond=True):
 		"""Create and initialize a Bayesian Phone Loop Model.
 		Parameters
 		----------
@@ -96,10 +96,11 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		num_ops = 1 + 2 * n_units
 		op_latent_priors = [Dirichlet(np.ones(num_ops)) for _ in range(n_top_units)]
 		op_latent_posteriors = [Dirichlet(np.ones(num_ops)) for _ in range(n_top_units)]
-		# conditional distributions 
-		# convention: op_cond_dist[previous][current]
-		op_cond_priors = [[Dirichlet(np.ones(num_ops)) for _ in range(n_top_units)] for _ in range(n_top_units)]
-		op_cond_posteriors = [[Dirichlet(np.ones(num_ops)) for _ in range(n_top_units)] for _ in range(n_top_units)]
+		if extra_cond:
+			# conditional distributions 
+			# convention: op_cond_dist[previous][current]
+			op_cond_priors = [[Dirichlet(np.ones(num_ops)) for _ in range(n_top_units)] for _ in range(n_top_units)]
+			op_cond_posteriors = [[Dirichlet(np.ones(num_ops)) for _ in range(n_top_units)] for _ in range(n_top_units)]
 
 		# Initialize the priors over Gaussian component choice within HMM states
 		state_priors = [Dirichlet(np.ones(n_comp_per_state))
@@ -132,12 +133,15 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 				prior_var
 			)
 			components.append(NormalDiag(priors[i], posterior))
+		if extra_cond:
+			return PhoneLoopNoisyChannel(op_latent_priors, op_latent_posteriors, op_cond_priors, 
+							 state_priors, state_posteriors, components, max_slip_factor,op_cond_posteriors)
 
-		return PhoneLoopNoisyChannel(op_latent_priors, op_latent_posteriors, op_cond_priors, op_cond_posteriors, 
-						 state_priors, state_posteriors, components, max_slip_factor)
+		return PhoneLoopNoisyChannel(op_latent_priors, op_latent_posteriors, op_cond_priors, 
+							 state_priors, state_posteriors, components, max_slip_factor)
 
-	def __init__(self, op_latent_priors, op_latent_posteriors, op_cond_priors, op_cond_posteriors, 
-						 state_priors, state_posteriors, components, max_slip_factor):
+	def __init__(self, op_latent_priors, op_latent_posteriors, op_cond_priors, 
+						 state_priors, state_posteriors, components, max_slip_factor, op_cond_posteriors=None):
 
 		# Ok I think we're not gonna do this here, we're just gonna implement
 		# our own version of the DiscreteLatentModel functions (because we have
@@ -156,7 +160,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.op_latent_posteriors = op_latent_posteriors
 
 		self.op_cond_priors = op_cond_priors
-		self.op_cond_posteriors = op_cond_posteriors
+		if op_cond_posteriors is not None:
+			self.op_cond_posteriors = op_cond_posteriors
 
 		self.state_priors = state_priors
 		self.state_posteriors = state_posteriors
@@ -166,7 +171,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.post_update()
 
 		self.update_renorms()
-		self.update_cond()
+		
+		if self.op_cond_posteriors is not None:
+			self.update_cond()
 
 	# instead of renorms, use conditional dists
 	def update_renorms(self):
@@ -520,8 +527,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			for j in range(self.n_top_units):
 				cond_op_count_ij = cond_op_counts[i][j]
 				cond_op_grad = self.op_cond_priors[i][j].natural_params + cond_op_count_ij
-				cond_op_grad = cond_op_grad - self.op_cond_posteriors[i][j].natural_params
-				self.op_cond_posteriors[i][j].natural_params += lrate * cond_op_grad
+				if self.op_cond_posteriors is not None:
+					cond_op_grad = cond_op_grad - self.op_cond_posteriors[i][j].natural_params
+					self.op_cond_posteriors[i][j].natural_params += lrate * cond_op_grad
 
 
 
