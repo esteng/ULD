@@ -9,6 +9,7 @@ import amdtk
 from .cluster import segmentation_performance, pred_to_true_clustering, seq_to_bound
 from .nmi import tot_nmi, tot_ami
 from ..io import read_htk
+from .vis_edits import heatmap, visualize_edits
 
 
 timit_phone_symbols = [
@@ -138,6 +139,12 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		model = pickle.load(open(model_dir, 'rb'))
 		models = [(model, model_dir)]
 
+
+	try:
+		os.mkdir(os.path.join(output_dir, "plots"))
+	except FileExistsError:
+		pass
+	
 	# Compile audio file paths
 	audio_dir = os.path.abspath(audio_dir)
 	fea_paths = []
@@ -169,6 +176,8 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		if not os.path.exists(model_output_dir):
 			os.mkdir(model_output_dir)
 
+		if not os.path.exists(os.path.join(output_dir, "plots", os.path.basename(model_path))):
+			os.mkdir(os.path.join(output_dir, "plots", os.path.basename(model_path)))
 		pred_frame_labels_all = []
 		true_frame_labels_all = []
 		edit_ops_all = []
@@ -199,19 +208,13 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 													edit_ops=True, hmm_states=True, plus=True)
 			pred_frame_labels = np.array(plus)
 
+			filename = os.path.split(fea_path)[-1].split(".")[0]
+			# plot each file's edits 
+			visualize_edits(edit_ops, os.path.join(output_dir, "plots", os.path.basename(model_path), "{}-cor.png".format(filename)))
 
-			# print("---")
-			# print("Predicted labels for file", fea_path, ":")
-			# print(pred_frame_labels)
-			# print("pred shape: ", pred_frame_labels.shape)
 
 			# Get the PLU labels from the textgrid
 			true_frame_labels = np.array(read_tg(textgrid_path, len(pred_frame_labels)))
-
-			# print("---")
-			# print("True labels from textgrid", textgrid_path, ":")
-			# print(true_frame_labels)
-			# print("true shape:", true_frame_labels.shape)
 
 			assert(len(pred_frame_labels)==len(true_frame_labels))
 
@@ -227,6 +230,9 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 										samples_per_sec, 
 										os.path.join(tg_dir, os.path.split(fea_path)[1][:-4]+'.TextGrid'))
 
+
+		# plot heatmap
+		heatmap(edit_ops_all, os.path.join(output_dir, "plots", os.path.basename(model_path), "heatmap-{}.png".format(os.path.basename(model_path))))
 
 		pred_frame_labels_all = np.array(pred_frame_labels_all)
 		true_frame_labels_all = np.array(true_frame_labels_all)
@@ -389,11 +395,12 @@ def read_tg(path, n_frames):
 
 
 
-if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
+# if __name__ == '__main__':
+# 	parser = argparse.ArgumentParser()
 
-	parser.add_argument("model_path",  help="path to directory containing pickled model files")
-	parser.add_argument("audio_dir",  help="path to audio directory to evaluate on")
-	args = parser.parse_args()
+# 	parser.add_argument("model_path",  help="path to directory containing pickled model files")
+# 	parser.add_argument("audio_dir",  help="path to audio directory to evaluate on")
+# 	args = parser.parse_args()
 	
 	evaluate_model(args.model_path, args.audio_dir)
+

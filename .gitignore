@@ -18,3 +18,7 @@ writeups/MTL-AI-abstract/abstract.dvi
 # Ignore textgrids directories
 /**/textgrids*
 
+code/output/*
+code/test_example/*
+code/logs/*
+code/models/*
