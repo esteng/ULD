@@ -560,7 +560,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 	# @profile(immediate=True)
 	def forward_backward_noisy_channel(self, plu_tops, state_llh, file):
-
+		print("getting fwbw for file {}".format(file))
 		n_frames = state_llh.shape[0]
 
 		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)

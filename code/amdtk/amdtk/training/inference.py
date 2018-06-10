@@ -42,7 +42,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 				from amdtk import read_htk
 				import _pickle as pickle
 				import os
-
+				import time
 		self.epochs = int(args.get('epochs', 1))
 		self.batch_size = int(args.get('batch_size', 2))
 		self.audio_dir = args.get("audio_dir",None)
@@ -307,11 +307,13 @@ class NoisyChannelOptimizer(Optimizer):
 		self.dview.push({
 			'model': self.model,
 		})
-
-
+		import time
+		t0 = time.clock()
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
 	                                 fea_list)
+		t1 = time.clock()- t0
+		print("ESTEP TOOK {}".format(t1))
 		# Serial version
 		# stats_list = []
 		# for pair in fea_list:
