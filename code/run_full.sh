@@ -2,7 +2,7 @@
 #SBATCH --account=def-msonde1
 #SBATCH --ntasks=64             # number of MPI processes
 #SBATCH --mem-per-cpu=64G      # memory; default unit is megabytes
-#SBATCH --time=00-00:20          # time (DD-HH:MM)
+#SBATCH --time=00-12:00          # time (DD-HH:MM)
 
 cd amdtk;
 python setup.py install;
