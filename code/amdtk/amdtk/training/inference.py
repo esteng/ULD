@@ -42,7 +42,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 				from amdtk import read_htk
 				import _pickle as pickle
 				import os
-
+				import time
 		self.epochs = int(args.get('epochs', 1))
 		self.batch_size = int(args.get('batch_size', 2))
 		self.audio_dir = args.get("audio_dir",None)
@@ -75,9 +75,9 @@ class Optimizer(metaclass=abc.ABCMeta):
 		import _pickle as pickle
 		start_time = time.time()
 
-		for epoch in range(self.epochs):
+		for epoch in range(self.start_epoch, self.epochs):
 
-			# Shuffle the data to avoid cycle in the training.
+			# Shuffle the data to avoid cycle in the training
 			np_data = np.array(data, dtype=object)
 			idxs = np.arange(0, len(data))
 			np.random.shuffle(idxs)
@@ -87,16 +87,17 @@ class Optimizer(metaclass=abc.ABCMeta):
 			else:
 				batch_size = self.batch_size
 
-			for mini_batch in range(0, len(data), batch_size):
+			for mini_batch in range(self.starting_batch * batch_size, len(data), batch_size):
 
 				batch_num = int(mini_batch / batch_size) + 1
 
 				self.time_step += 1
 
 				# Index of the data mini-batch.
+				#start = mini_batch
+				#end = mini_batch + batch_size
 				start = mini_batch
-				end = mini_batch + batch_size
-
+				end =  batch_size + mini_batch
 				# Reshaped the list of features.
 				fea_list = shuffled_data[start:end]
 				# print("batch_size: ", batch_size)
@@ -114,6 +115,8 @@ class Optimizer(metaclass=abc.ABCMeta):
 					if not os.path.exists(self.pkl_path):
 						os.makedirs(self.pkl_path)
 					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
+					print("about to pickle")
+					print("path to file: {}".format(path_to_file))
 					with open(path_to_file, "wb") as f1:
 						pickle.dump(self.model, f1)
 					# evaluate model
@@ -307,11 +310,13 @@ class NoisyChannelOptimizer(Optimizer):
 		self.dview.push({
 			'model': self.model,
 		})
-
-
+		import time
+		t0 = time.clock()
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
 	                                 fea_list)
+		t1 = time.clock()- t0
+		print("ESTEP TOOK {}".format(t1))
 		# Serial version
 		# stats_list = []
 		# for pair in fea_list:

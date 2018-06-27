@@ -402,12 +402,5 @@ def read_tg(path, n_frames):
 # 	parser.add_argument("audio_dir",  help="path to audio directory to evaluate on")
 # 	args = parser.parse_args()
 	
-# 	evaluate_model(args.model_path, args.audio_dir)
-
-
-
-
-
-
-
+	evaluate_model(args.model_path, args.audio_dir)
 

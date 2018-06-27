@@ -62,7 +62,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	"""
 
 
-	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var, extra_cond=True):
+	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var, extra_cond=True, starting_batch=0, start_epoch=0):
 		"""Create and initialize a Bayesian Phone Loop Model.
 		Parameters
 		----------
@@ -135,13 +135,13 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			components.append(NormalDiag(priors[i], posterior))
 		if extra_cond:
 			return PhoneLoopNoisyChannel(op_latent_priors, op_latent_posteriors, op_cond_priors, 
-							 state_priors, state_posteriors, components, max_slip_factor,op_cond_posteriors)
+							 state_priors, state_posteriors, components, max_slip_factor,op_cond_posteriors,starting_batch)
 
 		return PhoneLoopNoisyChannel(op_latent_priors, op_latent_posteriors, op_cond_priors, 
-							 state_priors, state_posteriors, components, max_slip_factor)
+							 state_priors, state_posteriors, components, max_slip_factor, None, starting_batch, start_epoch)
 
 	def __init__(self, op_latent_priors, op_latent_posteriors, op_cond_priors, 
-						 state_priors, state_posteriors, components, max_slip_factor, op_cond_posteriors=None):
+						 state_priors, state_posteriors, components, max_slip_factor, op_cond_posteriors=None, starting_batch=0, start_epoch=0):
 
 		# Ok I think we're not gonna do this here, we're just gonna implement
 		# our own version of the DiscreteLatentModel functions (because we have
@@ -149,7 +149,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		#DiscreteLatentModel.__init__(self, latent_prior, latent_posterior, components)
 		self._components = components
 		self._exp_np_matrix = self._get_components_params_matrix()
-
+		self.starting_batch = starting_batch
+		self.start_epoch=start_epoch
 		self.n_units = int((len(op_latent_priors[0].natural_params)-1)/2)
 		self.n_states = len(state_priors) // self.n_units
 		self.n_comp_per_states = len(state_priors[0].natural_params)
@@ -560,7 +561,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 	# @profile(immediate=True)
 	def forward_backward_noisy_channel(self, plu_tops, state_llh, file):
-
+		print("getting fwbw for file {}".format(file))
 		n_frames = state_llh.shape[0]
 
 		max_slip = math.ceil(len(plu_tops)*self.max_slip_factor)
