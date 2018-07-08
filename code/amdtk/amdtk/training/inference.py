@@ -43,6 +43,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 				import _pickle as pickle
 				import os
 				import time
+		self.lrate = float(args.get('lrate', 0.01))
 		self.epochs = int(args.get('epochs', 1))
 		self.batch_size = int(args.get('batch_size', 2))
 		self.audio_dir = args.get("audio_dir",None)
@@ -50,9 +51,21 @@ class Optimizer(metaclass=abc.ABCMeta):
 		self.audio_samples_per_sec = args.get("audio_samples_per_sec",None)
 		self.output_dir = args.get("output_dir", None)
 		if self.output_dir is not None:
-			self.this_output_dir = os.path.join(self.output_dir, time.strftime("output_%Y-%m-%d_%H:%M:%S"))
+			run_start_time = time.strftime("%Y-%m-%d_%H:%M:%S")
+			self.this_output_dir = os.path.join(self.output_dir, "output_"+run_start_time)
 			os.makedirs(self.this_output_dir)
 			print("Created output directory at", self.this_output_dir)
+			self.info_file = os.path.join(self.this_output_dir, 'info.txt')
+			with open(self.info_file, 'w') as f:
+				f.write('Run started at {}\n'.format(run_start_time))
+				f.write('Audio dir: {}\n'.format(self.audio_dir))
+				f.write('Evaluation audio dir: {}\n'.format(self.eval_audio_dir))
+				f.write('Epochs: {}\n'.format(self.epochs))
+				f.write('Batch size: {}\n'.format(self.batch_size))
+				f.write('Learning rate: {}\n'.format(self.lrate))
+				f.write('Audio samples per sec: {}\n'.format(self.audio_samples_per_sec))
+				f.write('PLU bottom types: {}\n'.format(model.n_units))
+				f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
 			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
 			with open(self.log_file, "w") as f1:
 				f1.write('epoch\tminibatch\telbo\ttime\n')
