@@ -10,6 +10,8 @@ from .cluster import segmentation_performance, pred_to_true_clustering, seq_to_b
 from .nmi import tot_nmi, tot_ami
 from ..io import read_htk
 from .vis_edits import heatmap, visualize_edits
+from ..shared.stats import collect_data_stats, accumulate_stats
+
 
 
 timit_phone_symbols = [
@@ -124,7 +126,10 @@ def boundary_precision(model_frame_labels, gold_standard_frame_labels):
 
 
 
-def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=False, write_textgrids=False):
+def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one_model=False, write_textgrids=False, corpus='timit'):
+	
+	print('Evaluating on audio in directory: ', audio_dir)
+
 	if not one_model:
 		# Load model(s)
 		models = []
@@ -159,10 +164,6 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 			if file.lower().endswith(".textgrid"):
 				textgrid_paths.append(os.path.join(root, file))
 
-	print('fea_paths:', fea_paths)
-	print('top_paths:', top_paths)
-	print('textgrid_paths:', textgrid_paths)
-
 	zipped_paths = list(zip(sorted(fea_paths), sorted(top_paths), sorted(textgrid_paths)))
 
 	for fea_file, top_file, textgrid_file in zipped_paths:
@@ -178,45 +179,34 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 
 		if not os.path.exists(os.path.join(output_dir, "plots", os.path.basename(model_path))):
 			os.mkdir(os.path.join(output_dir, "plots", os.path.basename(model_path)))
+
 		pred_frame_labels_all = []
 		true_frame_labels_all = []
 		edit_ops_all = []
 
 		print("Evaluating model",model_path)
 
+		# Collect mean and variance of data
+		data_stats = dview.map_sync(collect_data_stats, fea_paths)
+
+		# Accumulate the statistics over all the utterances.
+		final_data_stats = accumulate_stats(data_stats)
+
 		# Decode the data using the model
-		for fea_path, top_path, textgrid_path in zipped_paths:
+		# decoded_utterances will be a list of tuples (pred_frame_labels, true_frame_labels, edit_ops)
+		decode_func = lambda x: file_decode(x, final_data_stats, model)
+		decoded_utterances = dview.map_sync(decode_func, zipped_paths)
 
+		pred_frame_labels_all = []
+		true_frame_labels_all = []
+		edit_ops_all = []
 
-			data = read_htk(fea_path)
+		for fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals in decoded_utterances:
 
-			# Normalize the data
-			data_mean = np.mean(data)
-			data_var = np.var(data)
-			data = (data-data_mean)/np.sqrt(data_var)
-
-			# Read top PLU sequence from file
-			with open(top_path, 'r') as f:
-				topstring = f.read()
-				tops = topstring.strip().split(',')
-				tops = [int(x) for x in tops]
-
-			#result = model.decode(data, tops, state_path=False)
-			#result_path = model.decode(data, tops, state_path=True)
-			phone_intervals, edit_ops, hmm_states, plus = \
-					model.decode(data, tops, phone_intervals=True, 
-													edit_ops=True, hmm_states=True, plus=True)
-			pred_frame_labels = np.array(plus)
-
-			filename = os.path.split(fea_path)[-1].split(".")[0]
 			# plot each file's edits 
+			filename = os.path.split(fea_path)[-1].split(".")[0]
 			visualize_edits(edit_ops, os.path.join(output_dir, "plots", os.path.basename(model_path), "{}-cor.png".format(filename)))
 
-
-			# Get the PLU labels from the textgrid
-			true_frame_labels = np.array(read_tg(textgrid_path, len(pred_frame_labels)))
-
-			assert(len(pred_frame_labels)==len(true_frame_labels))
 
 			pred_frame_labels_all.append(pred_frame_labels)
 			true_frame_labels_all.append(true_frame_labels)
@@ -271,6 +261,44 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		# 	f1.write("{}, {}, {}\n".format(pred_true, nmi, bound_acc))
 
 		return(nmi, ami, bound_precision, bound_recall, bound_f1)
+
+
+def file_decode(arg_list, data_stats, model):
+
+	if isinstance(arg_list[0], str):
+		arg_list = [arg_list]
+
+	# Need to re-import since this code will run remotely
+	import amdtk
+	import numpy as np
+
+	for fea_path, top_path, textgrid_path in arg_list:
+
+		# Read data from file
+		data = read_htk(fea_path)
+
+		# Normalize the data based on stats from the ENTIRE evaluation data
+		data -= data_stats['mean']
+		data /= np.sqrt(data_stats['var'])
+
+		# Read top PLU sequence from file
+		with open(top_path, 'r') as f:
+			topstring = f.read()
+			tops = topstring.strip().split(',')
+			tops = [int(x) for x in tops]
+
+		phone_intervals, edit_ops, hmm_states, plus = \
+					model.decode(data, tops, phone_intervals=True, 
+													edit_ops=True, hmm_states=True, plus=True)
+		pred_frame_labels = np.array(plus)
+
+		# Get the PLU labels from the textgrid
+		true_frame_labels = np.array(read_tg(textgrid_path, len(pred_frame_labels)))
+
+		assert(len(pred_frame_labels)==len(true_frame_labels))
+
+		return fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals
+
 
 
 def edit_op_analysis(edit_ops_all, n_true_types, output_file):

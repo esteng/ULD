@@ -60,12 +60,16 @@ class Optimizer(metaclass=abc.ABCMeta):
 			with open(self.eval_file, "w") as f1:
 				f1.write('nmi\tami\tbound_precision\tbound_recall\tbound_f1\n')
 			self.pkl_dir = os.path.join(self.this_output_dir, 'pkl')
-			os.makedirs(self.pkl_dir)
+			os.mkdir(self.pkl_dir)
+			self.timing_dir = os.path.join(self.this_output_dir, 'timing')
+			os.mkdir(self.timing_dir)
 		else:
 			print("No output directory specified; no output will be produced.")
 		self.model = model
 		self.time_step = 0
 		self.data_stats = data_stats
+		self.start_epoch = 0
+		self.starting_batch = 0
 		if self.dview is not None:
 			self.dview.push({
 				'data_stats': data_stats
@@ -89,6 +93,14 @@ class Optimizer(metaclass=abc.ABCMeta):
 
 			for mini_batch in range(self.starting_batch * batch_size, len(data), batch_size):
 
+				if self.timing_dir is not None:
+					self.curr_timing_dir = os.path.join(self.timing_dir, "epoch-{}-batch-{}".format(epoch, mini_batch))
+					os.mkdir(self.curr_timing_dir)
+					if self.dview is not None:
+						self.dview.push({
+							'curr_timing_dir': self.curr_timing_dir
+						})
+
 				batch_num = int(mini_batch / batch_size) + 1
 
 				self.time_step += 1
@@ -110,26 +122,28 @@ class Optimizer(metaclass=abc.ABCMeta):
 				objective = \
 					self.train(new_fea_list, epoch + 1, self.time_step)
 
-				# pickle model
-				if self.pkl_path is not None:
-					if not os.path.exists(self.pkl_path):
-						os.makedirs(self.pkl_path)
-					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
-					print("about to pickle")
-					print("path to file: {}".format(path_to_file))
-					with open(path_to_file, "wb") as f1:
-						pickle.dump(self.model, f1)
-					# evaluate model
-					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
-						# res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
-										 # self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+				# # pickle model
+				# if self.pkl_path is not None:
+				# 	if not os.path.exists(self.pkl_path):
+				# 		os.makedirs(self.pkl_path)
+				# 	path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
+				# 	print("about to pickle")
+				# 	print("path to file: {}".format(path_to_file))
+				# 	with open(path_to_file, "wb") as f1:
+				# 		pickle.dump(self.model, f1)
 
-						nmi, ami, bound_prec, bound_rec, fval = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
-										 self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+				# 	# 
+					# # evaluate model
+					# with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
+					# 	# res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+					# 					 # self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
 
-						f1.write("nmi,ami,prec,rec,f1\n")
-						f1.write("{},{},{},{},{}".format(nmi, ami, bound_prec, bound_rec, fval))
-						f1.write("\n")
+					# 	nmi, ami, bound_prec, bound_rec, fval = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+					# 					 self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+
+					# 	f1.write("nmi,ami,prec,rec,f1\n")
+					# 	f1.write("{},{},{},{},{}".format(nmi, ami, bound_prec, bound_rec, fval))
+					# 	f1.write("\n")
 						
 
 				# Time since start
@@ -160,7 +174,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 
 			# evaluate model (only once per epoch)
 			if self.output_dir is not None:
-				eval_stats = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
+				eval_stats = evaluate_model(dview=self.dview, model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
 						output_dir=self.this_output_dir, samples_per_sec=self.audio_samples_per_sec, one_model=True, write_textgrids=True)
 				# write to eval file
 				with open(self.eval_file, "a") as f1:
@@ -379,8 +393,19 @@ class NoisyChannelOptimizer(Optimizer):
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
+
+			start_time = time.time()
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
 															 accumulate=True, filename=fea_file)
+			end_time = time.time()
+			if curr_timing_dir is not None:
+				with open(os.path.join(curr_timing_dir, os.path.split(fea_file)[1][:-4])+'.txt', 'w') as f:
+					f.write('PLU tops: {}\n'.format(len(tops)))
+					f.write('PLU bottom types: {}\n'.format(model.n_units))
+					f.write('Frames: {}\n'.format(data.shape[1]))
+					f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
+					f.write('\n')
+					f.write('Time elapsed: {}\n'.format(end_time-start_time))
 
 			exp_llh += numpy.sum(llh)
 

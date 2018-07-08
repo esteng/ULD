@@ -15,9 +15,11 @@ from ipyparallel import Client
 import _pickle as pickle
 import random
 
+from amdtk.shared.stats import collect_data_stats, accumulate_stats
+
 import sys
-DEBUG = True
-resume = '/home/esteng/project/esteng/ULD/code/output/models/epoch-0-batch-0'
+DEBUG = False
+resume = None #'/home/esteng/project/esteng/ULD/code/output/models/epoch-0-batch-0'
 train=True
 import amdtk
 import subprocess
@@ -30,42 +32,6 @@ random.seed(myseed)
 # np.seterr(divide='warn', over='warn', under='warn', invalid='raise')
 
 print("successfully completed imports")
-
-
-def collect_data_stats(filename):
-	"""Job to collect the statistics."""
-	# We  re-import this module here because this code will run
-	# remotely.
-	import amdtk
-	data = amdtk.read_htk(filename)
-	stats_0 = data.shape[0]
-	stats_1 = data.sum(axis=0)
-	stats_2 = (data**2).sum(axis=0)
-	retval = (
-		stats_0,
-		stats_1,
-		stats_2
-	)
-	return retval
-
-
-def accumulate_stats(data_stats):
-	n_frames = data_stats[0][0]
-	mean = data_stats[0][1]
-	var = data_stats[0][2]
-	for stats_0, stats_1, stats_2 in data_stats[1:]:
-		n_frames += stats_0
-		mean += stats_1
-		var += stats_2
-	mean /= n_frames
-	var = (var / n_frames) - mean**2
-
-	data_stats = {
-		'count': n_frames,
-		'mean': mean,
-		'var': var/20
-	}
-	return data_stats
 
 def run_amdtk_nc(args):
 
@@ -157,7 +123,7 @@ def run_amdtk_nc(args):
 			n_top_units=num_tops, # size of top PLU alphabet
 			mean=np.zeros_like(final_data_stats['mean']), 
 			var=np.ones_like(final_data_stats['var']/100),
-			max_slip_factor=.1,
+			max_slip_factor=args.max_slip_factor,
 			extra_cond=args.extra_cond
 		)
 		
@@ -229,6 +195,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--bottom_plu_count",  help="number of bottom PLUs", required=True, type=int)
+	parser.add_argument("--max_slip_factor",  help="what fraction to allow top & bottom PLU positions to differ by", required=True, type=float)
 	parser.add_argument("--n_epochs",  help="number of epochs of training to run", default=1, type=int)
 	parser.add_argument("--audio_dir",  help="location of audio files to train on", required=True)
 	parser.add_argument("--eval_dir",  help="location of audio files to evaluate on", required=True)
