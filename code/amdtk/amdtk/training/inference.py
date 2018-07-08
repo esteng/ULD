@@ -66,6 +66,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 				f.write('Audio samples per sec: {}\n'.format(self.audio_samples_per_sec))
 				f.write('PLU bottom types: {}\n'.format(model.n_units))
 				f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
+				f.write('Number of components per state: {}\n'.format(model.n_comp_per_states))
 			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
 			with open(self.log_file, "w") as f1:
 				f1.write('epoch\tminibatch\telbo\ttime\n')

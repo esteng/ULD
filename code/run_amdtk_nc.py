@@ -119,7 +119,7 @@ def run_amdtk_nc(args):
 		model = amdtk.PhoneLoopNoisyChannel.create(
 			n_units=str(args.bottom_plu_count),  # number of acoustic units
 			n_states=3,   # number of states per unit
-			n_comp_per_state=4,   # number of Gaussians per emission
+			n_comp_per_state=args.n_comp,   # number of Gaussians per emission
 			n_top_units=num_tops, # size of top PLU alphabet
 			mean=np.zeros_like(final_data_stats['mean']), 
 			var=np.ones_like(final_data_stats['var']/100),
@@ -196,6 +196,7 @@ if __name__ == '__main__':
 
 	parser.add_argument("--bottom_plu_count",  help="number of bottom PLUs", required=True, type=int)
 	parser.add_argument("--max_slip_factor",  help="what fraction to allow top & bottom PLU positions to differ by", required=True, type=float)
+	parser.add_argument("--n_comp",  help="number of Gaussian components per state", required=True, type=int)
 	parser.add_argument("--n_epochs",  help="number of epochs of training to run", default=1, type=int)
 	parser.add_argument("--audio_dir",  help="location of audio files to train on", required=True)
 	parser.add_argument("--eval_dir",  help="location of audio files to evaluate on", required=True)
