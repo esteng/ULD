@@ -15,7 +15,7 @@ from ipyparallel import Client
 import _pickle as pickle
 import random
 
-from amdtk.shared.stats import collect_data_stats, accumulate_stats
+from amdtk.shared.stats import collect_data_stats_by_speaker, accumulate_stats_by_speaker
 
 import sys
 DEBUG = False
@@ -91,13 +91,13 @@ def run_amdtk_nc(args):
 
 	print("There are {} files".format(len(fea_paths)))
 	print("Getting mean and variance of input data...")
-	data_stats = dview.map_sync(collect_data_stats, fea_paths)
+	data_stats = dview.map_sync(collect_data_stats_by_speaker, fea_paths)
 
 	# Accumulate the statistics over all the utterances.
-	final_data_stats = accumulate_stats(data_stats)
+	final_data_stats = accumulate_stats_by_speaker(data_stats)
 
 	tops = []
-	# Read top PLU sequence from file
+	# Read top PLU sequences from file
 	for top_path in top_paths:
 		with open(top_path, 'r') as f:
 			topstring = f.read()
@@ -121,8 +121,8 @@ def run_amdtk_nc(args):
 			n_states=3,   # number of states per unit
 			n_comp_per_state=args.n_comp,   # number of Gaussians per emission
 			n_top_units=num_tops, # size of top PLU alphabet
-			mean=np.zeros_like(final_data_stats['mean']), 
-			var=np.ones_like(final_data_stats['var']/100),
+			mean=np.zeros_like(final_data_stats[list(final_data_stats.keys())[0]]['mean']), 
+			var=np.ones_like(final_data_stats[list(final_data_stats.keys())[0]]['var']/20),
 			max_slip_factor=args.max_slip_factor,
 			extra_cond=args.extra_cond
 		)

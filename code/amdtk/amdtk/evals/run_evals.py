@@ -10,7 +10,7 @@ from .cluster import segmentation_performance, pred_to_true_clustering, seq_to_b
 from .nmi import tot_nmi, tot_ami
 from ..io import read_htk
 from .vis_edits import heatmap, visualize_edits
-from ..shared.stats import collect_data_stats, accumulate_stats
+from ..shared.stats import collect_data_stats_by_speaker, accumulate_stats_by_speaker
 
 
 
@@ -187,10 +187,10 @@ def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one
 		print("Evaluating model",model_path)
 
 		# Collect mean and variance of data
-		data_stats = dview.map_sync(collect_data_stats, fea_paths)
+		data_stats = dview.map_sync(collect_data_stats_by_speaker, fea_paths)
 
 		# Accumulate the statistics over all the utterances.
-		final_data_stats = accumulate_stats(data_stats)
+		final_data_stats = accumulate_stats_by_speaker(data_stats)
 
 		# Decode the data using the model
 		# decoded_utterances will be a list of tuples (pred_frame_labels, true_frame_labels, edit_ops)
@@ -277,9 +277,11 @@ def file_decode(arg_list, data_stats, model):
 		# Read data from file
 		data = read_htk(fea_path)
 
+		speaker = os.path.split(os.path.split(fea_path)[0])[1]
+
 		# Normalize the data based on stats from the ENTIRE evaluation data
-		data -= data_stats['mean']
-		data /= np.sqrt(data_stats['var'])
+		data -= data_stats[speaker]['mean']
+		data /= np.sqrt(data_stats[speaker]['var'])
 
 		# Read top PLU sequence from file
 		with open(top_path, 'r') as f:

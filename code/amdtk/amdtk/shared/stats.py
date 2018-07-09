@@ -18,6 +18,16 @@ def collect_data_stats(filename):
 	return retval
 
 
+def collect_data_stats_by_speaker(filename):
+
+	import os
+
+	stats = collect_data_stats(filename)
+	speaker = os.path.split(os.path.split(filename)[0])[1]
+
+	return (speaker, stats)
+
+
 def accumulate_stats(data_stats):
 	n_frames = data_stats[0][0]
 	mean = data_stats[0][1]
@@ -35,3 +45,21 @@ def accumulate_stats(data_stats):
 		'var': var/20
 	}
 	return data_stats
+
+def accumulate_stats_by_speaker(data_stats):
+
+	data_stats_dict = {}
+
+	for speaker, stats in data_stats:
+		if speaker in data_stats_dict:
+			data_stats_dict[speaker].append(stats)
+		else:
+			data_stats_dict[speaker] = [stats]
+
+
+	data_stats_accumulated_by_speaker = {}
+
+	for speaker in data_stats_dict.keys():
+		data_stats_accumulated_by_speaker[speaker] = accumulate_stats(data_stats_dict[speaker])
+	
+	return data_stats_accumulated_by_speaker

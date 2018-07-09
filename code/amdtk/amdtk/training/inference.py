@@ -84,6 +84,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 		self.data_stats = data_stats
 		self.start_epoch = 0
 		self.starting_batch = 0
+		self.tot_n_frames = sum([data_stats[x]['count'] for x in data_stats.keys()])
 		if self.dview is not None:
 			self.dview.push({
 				'data_stats': data_stats
@@ -309,8 +310,9 @@ class NoisyChannelOptimizer(Optimizer):
 
 			# Mean / Variance normalization.
 			data = read_htk(fea_file)
-			data -= data_stats['mean']
-			data /= np.sqrt(data_stats['var'])
+			speaker = os.path.split(os.path.split(fea_file)[0])[1]
+			data -= data_stats[speaker]['mean']
+			data /= np.sqrt(data_stats[speaker]['var'])
 
 			# Read top PLU sequence from file
 			with open(top_file, 'r') as f:
@@ -366,17 +368,17 @@ class NoisyChannelOptimizer(Optimizer):
 
 
 		# Scale the statistics.
-		scale = self.data_stats['count'] / n_frames
+		scale = self.tot_n_frames / n_frames
 		acc_stats *= scale
 		self.model.natural_grad_update(acc_stats, self.lrate)
 
-		elbo = (scale * exp_llh - kl_div) / self.data_stats['count']
+		elbo = (scale * exp_llh - kl_div) / self.tot_n_frames
 
 		print('epoch: ', epoch)
 		print('scale: ', scale)
 		print('exp_llh: ', exp_llh)
 		print('kl_div: ', kl_div)
-		print('self.data_stats["count"]: ', self.data_stats['count'])
+		print('tot_n_frames: ', self.tot_n_frames)
 		print('elbo: ', elbo)
 
 		return elbo
@@ -396,9 +398,10 @@ class NoisyChannelOptimizer(Optimizer):
 			(fea_file, top_file) = arg
 			# Mean / Variance normalization.
 			data = read_htk(fea_file)
-			data -= data_stats['mean']
+			speaker = os.path.split(os.path.split(fea_file)[0])[1]
+			data -= data_stats[speaker]['mean']
 
-			data /= numpy.sqrt(data_stats['var'])
+			data /= numpy.sqrt(data_stats[speaker]['var'])
 			# Read top PLU sequence from file
 			with open(top_file, 'r') as f:
 				data_str = f.read()
