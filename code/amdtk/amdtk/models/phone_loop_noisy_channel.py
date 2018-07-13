@@ -615,6 +615,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		# try no pruning
 
+		if output is not None:
+			with open(output, 'a') as f:
+				f.write('\nFORWARD')
+
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit):
 
 
@@ -625,7 +629,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 
 				with open(output, 'a') as f:
-					f.write('PLU bottom index: {},\ttime: {:.0f},\tmem: {:.2f} M\n'.format(plu_bottom_index, curr_time-start_time, mem_mb))
+					f.write('PLU bottom index: {}\ttime: {:.0f}\tmem: {:.2f} M\n'.format(plu_bottom_index, curr_time-start_time, mem_mb))
 
 			fw_pb_idxs |= {plu_bottom_index}
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
@@ -702,7 +706,24 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		pb_upper_limit = len(plu_tops)-1 + max_slip
 		pb_lower_limit = -1
+
+		if output is not None:
+			with open(output, 'a') as f:
+				f.write('\nBACKWARD')
+
 		for plu_bottom_index in range(pb_upper_limit, pb_lower_limit-1, -1):
+
+			if output is not None:
+				curr_time = time.time()
+				mem_bytes = process.memory_info().rss
+				mem_mb = mem_bytes / (1024 * 1024)
+
+
+				with open(output, 'a') as f:
+					f.write('PLU bottom index: {}\ttime: {:.0f}\tmem: {:.2f} M\n'.format(plu_bottom_index, curr_time-start_time, mem_mb))
+
+
+
 			bw_pb_idxs |= {plu_bottom_index}
 			# print("backward ** plu_bottom_index = "+str(plu_bottom_index))
 			# print("len(backward_probs) = "+str(len(backward_probs)))

@@ -433,7 +433,7 @@ class NoisyChannelOptimizer(Optimizer):
 
 			if curr_timing_file is not None:
 				with open(curr_timing_file, 'a') as f:
-					f.write('End time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(end_time))))
+					f.write('\nEnd time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(end_time))))
 					f.write('Elapsed time: {}\n'.format(end_time-start_time))
 					f.write('DONE')
 
