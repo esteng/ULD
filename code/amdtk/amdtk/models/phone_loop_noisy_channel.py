@@ -676,9 +676,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		backward_probs = {}
 		fw_bw_probs = {}
 
-		excessive_fw = []
-		excessive_bw = []
-		excessive_fw_bw = []
+		# excessive_fw = []
+		# excessive_bw = []
+		# excessive_fw_bw = []
 
 		# chart_log_probs = np.full((self.n_units, self.n_top_units), float('-inf'))
 
@@ -779,13 +779,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 										# fw_bw_prob = forward_probs.get(curr_state, float('-inf')) + \
 										# 			backward_probs.get(curr_state, float('-inf'))
 										# assert(fw_bw_prob != np.nan)
-										fw_bw_probs[curr_state] = fw_bw_prob
 
-										if curr_state[2] == 0 and plu_tops[curr_state[-1]] == 1 and edit_op == Ops.SUB:
+										# if curr_state[2] == 0 and plu_tops[curr_state[-1]] == 1 and edit_op == Ops.SUB:
 
-											excessive_fw.append(forward_probs[curr_state])
-											excessive_bw.append(backward_probs[curr_state])
-											excessive_fw_bw.append(fw_bw_probs[curr_state])
+										# 	excessive_fw.append(forward_probs[curr_state])
+										# 	excessive_bw.append(backward_probs[curr_state])
+										# 	excessive_fw_bw.append(fw_bw_probs[curr_state])
 
 										# now we need to normalize 
 										# need to get p(string)
@@ -815,11 +814,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 										# Update per-frame HMM expected counts
 										log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 
-									
-								# Remove curr_state from forward_probs and backward_probs to reduce memory usage
-								# (this is OK since it won't be referenced anymore)
-								forward_probs.pop(curr_state, None)
-								backward_probs.pop(curr_state, None)																				fw_bw_prob)
+																													fw_bw_prob)
+
+							# Remove curr_state from forwards and backwards dictionaries to reduce memory usage
+							# (this is safe since it won't be referenced again)
+							forwards_probs.pop(curr_state, None)			
+							forwards_probs.pop(curr_state, None)			
 
 		
 		# print("asserting log_op_counts don't start as nan")
@@ -840,9 +840,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		end_item_fw_probs = [ forward_probs.get(x, float('-inf')) for x in end_items]
 		end_item_total = logsumexp(end_item_fw_probs)
 
-		excessive_fw = np.array(excessive_fw) - end_item_total
-		excessive_bw = np.array(excessive_bw)- end_item_total
-		excessive_fw_bw = np.array(excessive_fw_bw)- end_item_total
+		# excessive_fw = np.array(excessive_fw) - end_item_total
+		# excessive_bw = np.array(excessive_bw)- end_item_total
+		# excessive_fw_bw = np.array(excessive_fw_bw)- end_item_total
 
 		# log_op_counts_normalized = log_op_counts - end_item_total
 		log_cond_op_counts_normalized = [None for _ in range(self.n_top_units)]
