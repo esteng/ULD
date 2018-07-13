@@ -6,3 +6,4 @@ textgrid
 theano
 matplotlib
 librosa
+profilehooks

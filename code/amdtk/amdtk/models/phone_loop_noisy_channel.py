@@ -419,7 +419,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		return kl_div
 
 	# @profile(immediate=True)
-	def get_posteriors(self, s_stats, top_seq, accumulate=False, filename=None, return_state_llh=False):
+	def get_posteriors(self, s_stats, top_seq, accumulate=False, filename=None, return_state_llh=False, output=None):
 		import time
 		# print("max s_stats:")
 		# print(np.max(s_stats))
@@ -431,7 +431,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# print(state_llh)
 		# The workhorse
 		
-		log_op_counts_normalized, log_cond_op_counts_normalized, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh, filename)
+		log_op_counts_normalized, log_cond_op_counts_normalized, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh, filename, output)
 		# # get last column of log state counts, which is the normalizer (i.e. P(X_{1:T})), prob of whole frame sequence
 		# log_prob_observations = logsumexp(log_state_counts[:,-1])
 
@@ -560,7 +560,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.update_renorms()
 
 	# @profile(immediate=True)
-	def forward_backward_noisy_channel(self, plu_tops, state_llh, file):
+	def forward_backward_noisy_channel(self, plu_tops, state_llh, file, output):
 		print("getting fwbw for file {}".format(file))
 		n_frames = state_llh.shape[0]
 
@@ -610,6 +610,13 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# try no pruning
 
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit):
+
+
+                        if output is not None:
+                                curr_time = time.time()
+                                with open(output, 'a') as f:
+                                        f.write('PLU bottom index: {}, time: {}\n'.format(plu_bottom_index, time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(curr_time))))
+
 			fw_pb_idxs |= {plu_bottom_index}
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
 			# print("len(forward_probs) = "+str(len(forward_probs)))
