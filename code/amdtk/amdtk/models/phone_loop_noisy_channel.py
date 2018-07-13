@@ -601,14 +601,17 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		pb_lower_limit = -1
 
 		# what if we do it as an np array? 
-		forward_arr = np.full((pb_upper_limit+1,len(plu_tops), self.n_units,n_frames, len(Ops.CODES), self.n_states), float('-inf'))
-		backward_arr = np.full((pb_upper_limit+1, len(plu_tops), self.n_units,n_frames, len(Ops.CODES), self.n_states), float('-inf'))
+		#forward_arr = np.full((pb_upper_limit+1,len(plu_tops), self.n_units,n_frames, len(Ops.CODES), self.n_states), float('-inf'))
+		#backward_arr = np.full((pb_upper_limit+1, len(plu_tops), self.n_units,n_frames, len(Ops.CODES), self.n_states), float('-inf'))
 		fw_pb_idxs = set()
 		fw_pt_idxs = set()
 		fw_pb_types = set()
 		fw_frame_idxs = set()
 		fw_edit_ops = set()
 		fw_hmm_states = set()
+
+		start_time = time.time()
+		process = psutil.Process(os.getpid())
 
 		# try no pruning
 
@@ -617,8 +620,12 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 			if output is not None:
 				curr_time = time.time()
+				mem_bytes = process.memory_info().rss
+				mem_mb = mem_bytes / (1024 * 1024)
+
+
 				with open(output, 'a') as f:
-					f.write('PLU bottom index: {}, time: {}\n'.format(plu_bottom_index, time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(curr_time))))
+					f.write('PLU bottom index: {},\ttime: {:.0f},\tmem: {:.2f} M\n'.format(plu_bottom_index, curr_time-start_time, mem_mb))
 
 			fw_pb_idxs |= {plu_bottom_index}
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
