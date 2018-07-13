@@ -885,6 +885,15 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		assert(not np.any(np.isnan(log_state_counts)))
 		assert(not np.any(np.isnan(log_op_counts_normalized)))
 
+		with open('/home/emilykl/log_op_counts_normalized.pkl', "wb") as f:
+			pickle.dump(log_op_counts_normalized, f)
+
+		with open('/home/emilykl/log_cond_op_counts_normalized.pkl', "wb") as f:
+			pickle.dump(log_cond_op_counts_normalized, f)
+
+		with open('/home/emilykl/log_state_counts.pkl', "wb") as f:
+			pickle.dump(log_state_counts, f)
+
 		return log_op_counts_normalized, log_cond_op_counts_normalized, log_state_counts
 
 	def generate_start_items(self, plu_tops, state_llh):
