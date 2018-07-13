@@ -815,7 +815,11 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 										# Update per-frame HMM expected counts
 										log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index] = np.logaddexp(log_state_counts[plu_bottom_type*self.n_states+hmm_state, frame_index], 
-																													fw_bw_prob)
+									
+								# Remove curr_state from forward_probs and backward_probs to reduce memory usage
+								# (this is OK since it won't be referenced anymore)
+								forward_probs.pop(curr_state, None)
+								backward_probs.pop(curr_state, None)																				fw_bw_prob)
 
 		
 		# print("asserting log_op_counts don't start as nan")
