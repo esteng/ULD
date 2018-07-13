@@ -612,10 +612,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit):
 
 
-                        if output is not None:
-                                curr_time = time.time()
-                                with open(output, 'a') as f:
-                                        f.write('PLU bottom index: {}, time: {}\n'.format(plu_bottom_index, time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(curr_time))))
+			if output is not None:
+				curr_time = time.time()
+				with open(output, 'a') as f:
+					f.write('PLU bottom index: {}, time: {}\n'.format(plu_bottom_index, time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(curr_time))))
 
 			fw_pb_idxs |= {plu_bottom_index}
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))

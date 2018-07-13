@@ -344,7 +344,7 @@ class NoisyChannelOptimizer(Optimizer):
 		t0 = time.clock()
 		# Parallel accumulation of the sufficient statistics.
 		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-	                                 fea_list)
+									 fea_list)
 		t1 = time.clock()- t0
 		print("ESTEP TOOK {}".format(t1))
 		# Serial version
@@ -414,28 +414,28 @@ class NoisyChannelOptimizer(Optimizer):
 			start_time = time.time()
 
 			if curr_timing_dir is not None:
-                                curr_timing_file = os.path.join(curr_timing_dir, os.path.split(fea_file)[1][:-4])
-                                curr_timing_file = curr_timing_file + '.txt'
-			        with open(curr_timing_file, 'w') as f:
+				curr_timing_file = os.path.join(curr_timing_dir, os.path.split(fea_file)[1][:-4])
+				curr_timing_file = curr_timing_file + '.txt'
+				with open(curr_timing_file, 'w') as f:
 					f.write('PLU tops: {}\n'.format(len(tops)))
 					f.write('PLU bottom types: {}\n'.format(model.n_units))
 					f.write('Frames: {}\n'.format(data.shape[1]))
 					f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
 					f.write('\n')
-                                        f.write('Start time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(start_time))))
-                                        f.write('\n')
-                        else:
-                                curr_timing_file = None
+					f.write('Start time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(start_time))))
+					f.write('\n')
+			else:
+				curr_timing_file = None
 
 			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
 															 accumulate=True, filename=fea_file, output=curr_timing_file)
 			end_time = time.time()
 
-                        if curr_timing_file is not None:
-                                with open(curr_timing_file, 'a') as f:
-                                        f.write('End time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(end_time))))
-                                        f.write('Elapsed time: {}\n'.format(end_time-start_time))
-                                        f.write('DONE')
+			if curr_timing_file is not None:
+				with open(curr_timing_file, 'a') as f:
+					f.write('End time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(end_time))))
+					f.write('Elapsed time: {}\n'.format(end_time-start_time))
+					f.write('DONE')
 
 			exp_llh += numpy.sum(llh)
 
