@@ -818,8 +818,8 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 							# Remove curr_state from forwards and backwards dictionaries to reduce memory usage
 							# (this is safe since it won't be referenced again)
-							forwards_probs.pop(curr_state, None)			
-							forwards_probs.pop(curr_state, None)			
+							forward_probs.pop(curr_state, None)			
+							backward_probs.pop(curr_state, None)			
 
 		
 		# print("asserting log_op_counts don't start as nan")
@@ -888,15 +888,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		assert(not np.any(np.isnan(log_state_counts)))
 		assert(not np.any(np.isnan(log_op_counts_normalized)))
-
-		with open('/home/emilykl/log_op_counts_normalized.pkl', "wb") as f:
-			pickle.dump(log_op_counts_normalized, f)
-
-		with open('/home/emilykl/log_cond_op_counts_normalized.pkl', "wb") as f:
-			pickle.dump(log_cond_op_counts_normalized, f)
-
-		with open('/home/emilykl/log_state_counts.pkl', "wb") as f:
-			pickle.dump(log_state_counts, f)
 
 		return log_op_counts_normalized, log_cond_op_counts_normalized, log_state_counts
 
