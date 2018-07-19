@@ -35,6 +35,11 @@ def visualize_edits(edit_path, save_path):
 
 		
 def heatmap(all_paths, save_path):
+
+	if len(all_paths) == 0:
+		# No paths, so nothing to do
+		return
+
 	all_tops = sorted(set([t[1] for path in all_paths for t in path]))
 	all_bots = sorted(set([t[2] for path in all_paths for t in path]))
 

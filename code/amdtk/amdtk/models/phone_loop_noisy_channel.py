@@ -65,7 +65,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 	"""
 
 
-	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var, extra_cond=True, starting_batch=0, start_epoch=0):
+	def create(n_units, n_states, n_comp_per_state, n_top_units, max_slip_factor, mean, var, limits, extra_cond=True, starting_batch=0, start_epoch=0):
 		"""Create and initialize a Bayesian Phone Loop Model.
 		Parameters
 		----------
@@ -137,14 +137,32 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			)
 			components.append(NormalDiag(priors[i], posterior))
 		if extra_cond:
-			return PhoneLoopNoisyChannel(op_latent_priors, op_latent_posteriors, op_cond_priors, 
-							 state_priors, state_posteriors, components, max_slip_factor,op_cond_posteriors,starting_batch)
+			return PhoneLoopNoisyChannel(op_latent_priors=op_latent_priors,
+				op_latent_posteriors=op_latent_posteriors,
+				op_cond_priors=op_cond_priors, 
+				state_priors=state_priors,
+				state_posteriors=state_posteriors,
+				components=components,
+				max_slip_factor=max_slip_factor,
+				limits=limits,
+				op_cond_posteriors=op_cond_posteriors,
+				starting_batch=starting_batch,
+				start_epoch=start_epoch)
 
-		return PhoneLoopNoisyChannel(op_latent_priors, op_latent_posteriors, op_cond_priors, 
-							 state_priors, state_posteriors, components, max_slip_factor, None, starting_batch, start_epoch)
+		return PhoneLoopNoisyChannel(op_latent_priors=op_latent_priors, 
+			op_latent_posteriors=op_latent_posteriors,
+			op_cond_priors=op_cond_priors, 
+			state_priors=state_priors,
+			state_posteriors=state_posteriors,
+			components=components, 
+			max_slip_factor=max_slip_factor,
+			limits=limits,
+			op_cond_posteriors=None,
+			starting_batch=starting_batch,
+			start_epoch=start_epoch)
 
 	def __init__(self, op_latent_priors, op_latent_posteriors, op_cond_priors, 
-						 state_priors, state_posteriors, components, max_slip_factor, op_cond_posteriors=None, starting_batch=0, start_epoch=0):
+						 state_priors, state_posteriors, components, max_slip_factor, limits, op_cond_posteriors=None, starting_batch=0, start_epoch=0):
 
 		# Ok I think we're not gonna do this here, we're just gonna implement
 		# our own version of the DiscreteLatentModel functions (because we have
@@ -171,6 +189,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		self.state_posteriors = state_posteriors
 
 		self.p_threshold = float("-inf")
+
+		self.plu_top_limit = limits.get('plu_top', float('inf'))
+		self.mem_limit = limits.get('mem', float('inf'))
+		self.time_limit = limits.get('time', float('inf'))
 
 		self.post_update()
 
@@ -246,6 +268,14 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 
 	def decode(self, data, plu_tops, phone_intervals=False, edit_ops=False, hmm_states=False, plus=True):
+
+		start_time = time.time()
+		process = psutil.Process(os.getpid())
+
+
+		if len(plu_tops) > self.plu_top_limit:
+			return 'plu top limit'
+
 		s_stats = self.get_sufficient_stats(data)
 
 		state_llh, c_given_s_resps = self._get_state_llh(s_stats)
@@ -271,6 +301,18 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit):
 
+			curr_time = time.time()
+			elapsed_time = curr_time-start_time
+			mem_bytes = process.memory_info().rss
+			mem_mb = mem_bytes / (1024 * 1024)
+
+			print("decoding mem used: {} M".format(mem_mb))
+
+			if mem_mb > self.mem_limit:
+				return 'mem limit (PLU {} of {})'.format(plu_bottom_index, pb_upper_limit-1)
+
+			if elapsed_time > self.time_limit:
+				return 'time limit (PLU {} of {})'.format(plu_bottom_index, pb_upper_limit-1)
 			pt_lower_limit = max(-1,plu_bottom_index-max_slip)
 			pt_upper_limit = min(len(plu_tops), plu_bottom_index+max_slip)
 			# pt_lower_limit = -1
@@ -374,8 +416,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 			return_values.append(hmm_state_path)
 
 		if plus:
-			return_values.append(plu_path)
-		
+			return_values.append(plu_path)		
 
 		if len(return_values) == 0:
 			return plu_path
@@ -423,6 +464,15 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 	# @profile(immediate=True)
 	def get_posteriors(self, s_stats, top_seq, accumulate=False, filename=None, return_state_llh=False, output=None):
+
+		if len(top_seq) > self.plu_top_limit:
+			if output is not None:
+				with open(output, 'a') as f:
+					f.write('ABORTING due to PLU top number greater than limit\n')
+					f.write('PLU tops: {}\tPLU top limit: {}\n'.format(len(top_seq), int(self.plu_top_limit)))
+
+			return None, None, None
+
 		import time
 		# print("max s_stats:")
 		# print(np.max(s_stats))
@@ -435,6 +485,10 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		# The workhorse
 		
 		log_op_counts_normalized, log_cond_op_counts_normalized, log_state_counts = self.forward_backward_noisy_channel(top_seq, state_llh, filename, output)
+		
+		if log_op_counts_normalized is None:
+			return None, None, None
+
 		# # get last column of log state counts, which is the normalizer (i.e. P(X_{1:T})), prob of whole frame sequence
 		# log_prob_observations = logsumexp(log_state_counts[:,-1])
 
@@ -617,19 +671,34 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		if output is not None:
 			with open(output, 'a') as f:
-				f.write('\nFORWARD')
+				f.write('\nFORWARD\n')
 
 		for plu_bottom_index in range(pb_lower_limit,pb_upper_limit):
 
+			curr_time = time.time()
+			elapsed_time = curr_time-start_time
+			mem_bytes = process.memory_info().rss
+			mem_mb = mem_bytes / (1024 * 1024)
 
 			if output is not None:
-				curr_time = time.time()
-				mem_bytes = process.memory_info().rss
-				mem_mb = mem_bytes / (1024 * 1024)
-
-
 				with open(output, 'a') as f:
-					f.write('PLU bottom index: {}\ttime: {:.0f}\tmem: {:.2f} M\n'.format(plu_bottom_index, curr_time-start_time, mem_mb))
+					f.write('PLU bottom index: {}\ttime: {:.0f}\tmem: {:.2f} M\n'.format(plu_bottom_index, elapsed_time, mem_mb))
+
+			if mem_mb > self.mem_limit:
+				if output is not None:
+					with open(output, 'a') as f:
+						f.write('ABORTING due to mem limit reached\n')
+						f.write('mem used: {}\tmem limit: {}\n'.format(mem_mb, self.mem_limit))
+				return None, None, None
+
+			if elapsed_time > self.time_limit:
+				if output is not None:
+					with open(output, 'a') as f:
+						f.write('ABORTING due to time limit reached\n')
+						f.write('time used: {}\ttime limit: {}\n'.format(elapsed_time, self.time_limit))
+				return None, None, None
+
+
 
 			fw_pb_idxs |= {plu_bottom_index}
 			# print("forward ** plu_bottom_index = "+str(plu_bottom_index))
@@ -671,7 +740,6 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 										else:
 											forward_probs[next_state] = prob
 
-
 		# Calculate backward probabilities, and also sum forwards+backwards probabilities in the same pass
 		backward_probs = {}
 		fw_bw_probs = {}
@@ -709,19 +777,32 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 		if output is not None:
 			with open(output, 'a') as f:
-				f.write('\nBACKWARD')
+				f.write('\nBACKWARD\n')
 
 		for plu_bottom_index in range(pb_upper_limit, pb_lower_limit-1, -1):
 
+			curr_time = time.time()
+			elapsed_time = curr_time-start_time
+			mem_bytes = process.memory_info().rss
+			mem_mb = mem_bytes / (1024 * 1024)
+
 			if output is not None:
-				curr_time = time.time()
-				mem_bytes = process.memory_info().rss
-				mem_mb = mem_bytes / (1024 * 1024)
-
-
 				with open(output, 'a') as f:
-					f.write('PLU bottom index: {}\ttime: {:.0f}\tmem: {:.2f} M\n'.format(plu_bottom_index, curr_time-start_time, mem_mb))
+					f.write('PLU bottom index: {}\ttime: {:.0f}\tmem: {:.2f} M\n'.format(plu_bottom_index, elapsed_time, mem_mb))
 
+			if mem_mb > self.mem_limit:
+				if output is not None:
+					with open(output, 'a') as f:
+						f.write('ABORTING due to mem limit reached\n')
+						f.write('mem used: {}\tmem limit: {}\n'.format(mem_mb, self.mem_limit))
+				return None, None, None
+
+			if elapsed_time > self.time_limit:
+				if output is not None:
+					with open(output, 'a') as f:
+						f.write('ABORTING due to time limit reached\n')
+						f.write('time used: {}\ttime limit: {}\n'.format(elapsed_time, self.time_limit))
+				return None, None, None
 
 
 			bw_pb_idxs |= {plu_bottom_index}
@@ -763,7 +844,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 									# chart_log_probs[plu_bottom_type, plu_tops[plu_top_index]] = np.logaddexp(chart_log_probs[plu_bottom_type, plu_tops[plu_top_index]], forward_probs[curr_state])
 
 								
-								if curr_state in backward_probs:
+								if curr_state in backward_probs and backward_probs[curr_state] > neg_inf:
 
 									# Update probabilities for previous states
 									prevs = self.prev_states((curr_state, backward_probs[curr_state]), plu_tops, state_llh, max_slip, frames_per_top, log05)
@@ -775,7 +856,9 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 
 									# Sum forwards & backwards probabilities
 									if curr_state in forward_probs:
+
 										fw_bw_prob = forward_probs[curr_state] + backward_probs[curr_state]
+
 										# fw_bw_prob = forward_probs.get(curr_state, float('-inf')) + \
 										# 			backward_probs.get(curr_state, float('-inf'))
 										# assert(fw_bw_prob != np.nan)
@@ -932,7 +1015,7 @@ class PhoneLoopNoisyChannel(DiscreteLatentModel):
 		it_start_item = ((-1,self.n_states-1,0,-1,Ops.IT,0), (log_prob_it))
 
 		# Substitute start items
-		sub_start_items = [((0, 0, pb, 0, Ops.SUB, 0),(state_llh[0,(pb*self.n_states)] + log_prob_sub[pb])) for pb in range(self.n_units)]
+		sub_start_items = [((0, 0, pb, 0, Ops.SUB, 0), (state_llh[0, (pb*self.n_states)] + log_prob_sub[pb])) for pb in range(self.n_units)]
 
 		items = ib_start_items
 		items.append(it_start_item)

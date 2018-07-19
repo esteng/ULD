@@ -67,9 +67,12 @@ class Optimizer(metaclass=abc.ABCMeta):
 				f.write('PLU bottom types: {}\n'.format(model.n_units))
 				f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
 				f.write('Number of components per state: {}\n'.format(model.n_comp_per_states))
+				f.write('PLU top limit: {}\n'.format(model.plu_top_limit))
+				f.write('Memory limit: {} M\n'.format(model.mem_limit))
+				f.write('Time limit: {} sec\n'.format(model.time_limit))
 			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
 			with open(self.log_file, "w") as f1:
-				f1.write('epoch\tminibatch\telbo\ttime\n')
+				f1.write('epoch\tminibatch\telbo\tn_files\tskipped\ttime\n')
 			self.eval_file = os.path.join(self.this_output_dir, 'eval.log')
 			with open(self.eval_file, "w") as f1:
 				f1.write('nmi\tami\tbound_precision\tbound_recall\tbound_f1\n')
@@ -137,6 +140,13 @@ class Optimizer(metaclass=abc.ABCMeta):
 				objective = \
 					self.train(new_fea_list, epoch + 1, self.time_step)
 
+				print('objective: ', objective)
+
+				skipped = None
+				if isinstance(objective, tuple):
+					skipped = objective[1]
+					objective = objective[0]
+
 				# # pickle model
 				# if self.pkl_path is not None:
 				# 	if not os.path.exists(self.pkl_path):
@@ -175,7 +185,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 
 					# write to log file
 					with open(self.log_file, "a") as f1:
-						f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective, time_elapsed]]))
+						f1.write("\t".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective, len(new_fea_list), skipped, time_elapsed]]))
 						f1.write("\n")						
 					
 				# Monitor the convergence.
@@ -305,6 +315,8 @@ class NoisyChannelOptimizer(Optimizer):
 		acc_stats = None
 		n_frames = 0
 
+		skipped = 0
+
 		for arg in args_list:
 			(fea_file, top_file) = arg
 
@@ -323,16 +335,46 @@ class NoisyChannelOptimizer(Optimizer):
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename=fea_file)
 
-			exp_llh += np.sum(llh)
-			n_frames += len(data)
-			if acc_stats is None:
-				acc_stats = new_acc_stats
+			start_time = time.time()
+
+			if self.curr_timing_dir is not None:
+				curr_timing_file = os.path.join(self.curr_timing_dir, os.path.split(fea_file)[1][:-4])
+				curr_timing_file = curr_timing_file + '.txt'
+				with open(curr_timing_file, 'w') as f:
+					f.write('PLU tops: {}\n'.format(len(tops)))
+					f.write('PLU bottom types: {}\n'.format(model.n_units))
+					f.write('Frames: {}\n'.format(data.shape[1]))
+					f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
+					f.write('\n')
+					f.write('Start time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(start_time))))
+					f.write('\n')
 			else:
-				acc_stats += new_acc_stats
+				curr_timing_file = None
 
-		return (exp_llh, acc_stats, n_frames)    
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
+															 accumulate=True, filename=fea_file, output=curr_timing_file)
+			end_time = time.time()
+
+			if curr_timing_file is not None:
+				with open(curr_timing_file, 'a') as f:
+					f.write('\nEnd time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(end_time))))
+					f.write('Elapsed time: {}\n'.format(end_time-start_time))
+					f.write('DONE')
+
+			if llh is not None:
+				exp_llh += np.sum(llh)
+				n_frames += len(data)
+
+			if new_acc_stats is not None:	
+				if acc_stats is None:
+					acc_stats = new_acc_stats
+				else:
+					acc_stats += new_acc_stats
+			else:
+				skipped +=1
+
+		return (exp_llh, acc_stats, n_frames, skipped)    
 
 	def train(self, fea_list, epoch, time_step):
 
@@ -343,45 +385,56 @@ class NoisyChannelOptimizer(Optimizer):
 		import time
 		t0 = time.clock()
 		# Parallel accumulation of the sufficient statistics.
-		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-									 fea_list)
+		# stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
+		# 							 fea_list)
 		t1 = time.clock()- t0
 		print("ESTEP TOOK {}".format(t1))
 		# Serial version
-		# stats_list = []
-		# for pair in fea_list:
-		# 	stats_list.append(self.e_step_nonstatic(pair))
+		stats_list = []
+		for pair in fea_list:
+			stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
-
-
 		n_frames = stats_list[0][2]
-		for val1, val2, val3 in stats_list[1:]:
+		skipped = stats_list[0][3]
+
+		for val1, val2, val3, val4 in stats_list[1:]:
 			exp_llh += val1
-			acc_stats += val2
+			if val2 is not None:
+				if acc_stats is None:
+					acc_stats = val2
+				else:
+					acc_stats += val2
 			n_frames += val3
+			skipped += val4
 
 		kl_div = self.model.kl_div_posterior_prior()
 
+		if n_frames == 0:
+			print('WARNING: Trained on 0 files.')
+			elbo = np.nan
+			return (elbo, skipped)
 
-		# Scale the statistics.
-		scale = self.tot_n_frames / n_frames
-		acc_stats *= scale
-		self.model.natural_grad_update(acc_stats, self.lrate)
+		else:
 
-		elbo = (scale * exp_llh - kl_div) / self.tot_n_frames
+			# Scale the statistics.
+			scale = self.tot_n_frames / n_frames
+			acc_stats *= scale
+			self.model.natural_grad_update(acc_stats, self.lrate)
 
-		print('epoch: ', epoch)
-		print('scale: ', scale)
-		print('exp_llh: ', exp_llh)
-		print('kl_div: ', kl_div)
-		print('tot_n_frames: ', self.tot_n_frames)
-		print('elbo: ', elbo)
+			elbo = (scale * exp_llh - kl_div) / self.tot_n_frames
 
-		return elbo
+			print('epoch: ', epoch)
+			print('scale: ', scale)
+			print('exp_llh: ', exp_llh)
+			print('kl_div: ', kl_div)
+			print('tot_n_frames: ', self.tot_n_frames)
+			print('elbo: ', elbo)
+
+		return (elbo, skipped)
 
 
 	@staticmethod
@@ -393,6 +446,8 @@ class NoisyChannelOptimizer(Optimizer):
 		exp_llh = 0.
 		acc_stats = None
 		n_frames = 0
+
+		skipped = 0
 
 		for arg in args_list:
 			(fea_file, top_file) = arg
@@ -437,15 +492,19 @@ class NoisyChannelOptimizer(Optimizer):
 					f.write('Elapsed time: {}\n'.format(end_time-start_time))
 					f.write('DONE')
 
-			exp_llh += numpy.sum(llh)
+			if llh is not None:
+				exp_llh += numpy.sum(llh)
+				n_frames += len(data)
 
-			n_frames += len(data)
-			if acc_stats is None:
-				acc_stats = new_acc_stats
+			if new_acc_stats is not None:	
+				if acc_stats is None:
+					acc_stats = new_acc_stats
+				else:
+					acc_stats += new_acc_stats
 			else:
-				acc_stats += new_acc_stats
+				skipped +=1
 
-		return (exp_llh, acc_stats, n_frames)
+		return (exp_llh, acc_stats, n_frames, skipped)
 
 
 class ToyNoisyChannelOptimizer(Optimizer):

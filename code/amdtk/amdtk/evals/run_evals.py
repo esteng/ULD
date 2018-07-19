@@ -122,7 +122,10 @@ def boundary_precision(model_frame_labels, gold_standard_frame_labels):
 					correct += 1
 				total +=1
 
-	return correct/total
+	if total==0:
+		return np.nan
+	else:
+		return correct/total
 
 
 
@@ -195,18 +198,36 @@ def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one
 		# Decode the data using the model
 		# decoded_utterances will be a list of tuples (pred_frame_labels, true_frame_labels, edit_ops)
 		decode_func = lambda x: file_decode(x, final_data_stats, model)
-		decoded_utterances = dview.map_sync(decode_func, zipped_paths)
+		#decoded_utterances_all = dview.map_sync(decode_func, zipped_paths)
+
+		decoded_utterances_all = []
+		for path_trio in zipped_paths:
+			decoded_utterances_all.append(decode_func(path_trio))
+
+
+		decoded_utterances = [x for x in decoded_utterances_all if not isinstance(x, str)]
+		error_msgs = [x for x in decoded_utterances_all if isinstance(x, str)]
+
+		with open(os.path.join(model_output_dir, 'decode_errors.log'), 'w') as f:
+			f.write('skipped {} of {} eval files\n'.format(len(error_msgs), len(decoded_utterances_all)))
+			print(decoded_utterances_all)
+			for idx, val in enumerate(decoded_utterances_all):
+				if isinstance(val, str):
+					f.write('{}: {}\n'.format(os.path.basename(zipped_paths[idx][0]),val))
 
 		pred_frame_labels_all = []
 		true_frame_labels_all = []
 		edit_ops_all = []
 
-		for fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals in decoded_utterances:
+		for utt in decoded_utterances:
+
+			print('utt: ', utt)
+
+			fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals = utt
 
 			# plot each file's edits 
 			filename = os.path.split(fea_path)[-1].split(".")[0]
 			visualize_edits(edit_ops, os.path.join(output_dir, "plots", os.path.basename(model_path), "{}-cor.png".format(filename)))
-
 
 			pred_frame_labels_all.append(pred_frame_labels)
 			true_frame_labels_all.append(true_frame_labels)
@@ -256,11 +277,13 @@ def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one
 		bound_precision = boundary_precision(true_frame_labels_all, pred_frame_labels_all)
 		bound_recall = boundary_precision(pred_frame_labels_all, true_frame_labels_all)
 		bound_f1 = 2 * bound_precision * bound_recall / (bound_precision + bound_recall)
+		n_files = len(decoded_utterances_all)
+		skipped = len(error_msgs)
 		# with open(os.path.join(model_output_dir, "eval-stats-{}.txt".format(os.path.basename(model_path))), "w") as f1:
 		# 	f1.write("pred_true, nmi, bound_acc\n")
 		# 	f1.write("{}, {}, {}\n".format(pred_true, nmi, bound_acc))
 
-		return(nmi, ami, bound_precision, bound_recall, bound_f1)
+		return(nmi, ami, bound_precision, bound_recall, bound_f1, n_files, skipped)
 
 
 def file_decode(arg_list, data_stats, model):
@@ -289,9 +312,18 @@ def file_decode(arg_list, data_stats, model):
 			tops = topstring.strip().split(',')
 			tops = [int(x) for x in tops]
 
-		phone_intervals, edit_ops, hmm_states, plus = \
+		result = \
 					model.decode(data, tops, phone_intervals=True, 
 													edit_ops=True, hmm_states=True, plus=True)
+
+		if isinstance(result, str):
+			print('WARNING: Decoding on 0 files.')
+			return result
+
+
+		phone_intervals, edit_ops, hmm_states, plus = result
+
+
 		pred_frame_labels = np.array(plus)
 
 		# Get the PLU labels from the textgrid
@@ -304,6 +336,11 @@ def file_decode(arg_list, data_stats, model):
 
 
 def edit_op_analysis(edit_ops_all, n_true_types, output_file):
+
+	if len(edit_ops_all) == 0:
+		with open(output_file, 'w') as f1:
+			f1.write('No data to evaluate on.')
+		return
 
 	edit_op_counts = dict()
 	for utt in edit_ops_all:
@@ -348,6 +385,11 @@ def edit_op_analysis(edit_ops_all, n_true_types, output_file):
 
 
 def correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, output_file):
+
+	if len(true_frame_labels_all) == 0:
+		with open(output_file, 'w') as f1:
+			f1.write('No data to evaluate on.')
+		return
 
 	n_true_types = max([ max(x) for x in true_frame_labels_all ]) + 1
 	n_pred_types = max([ max(x) for x in pred_frame_labels_all ]) + 1

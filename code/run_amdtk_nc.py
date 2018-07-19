@@ -124,7 +124,10 @@ def run_amdtk_nc(args):
 			mean=np.zeros_like(final_data_stats[list(final_data_stats.keys())[0]]['mean']), 
 			var=np.ones_like(final_data_stats[list(final_data_stats.keys())[0]]['var']/20),
 			max_slip_factor=args.max_slip_factor,
-			extra_cond=args.extra_cond
+			extra_cond=args.extra_cond,
+			limits = {'plu_top'	: args.plu_top_limit,
+						'mem'	: args.mem_limit,
+						'time'	: args.time_limit}
 		)
 		
 	else:
@@ -206,6 +209,9 @@ if __name__ == '__main__':
 	parser.add_argument("--decode", help="flag to decode or not", action="store_true", default=False)
 	parser.add_argument("--lrate", help="set the learn rate", default=0.01, type=float)
 	parser.add_argument("--extra_cond", help="set to true for bigram conditioning", action="store_true", default=True)
+	parser.add_argument("--plu_top_limit", help="skip files with more PLU tops than this", type=float, default=float('inf'))
+	parser.add_argument("--mem_limit", help="abandon count accumulation when memory used is greater than this (MB)", type=float, default=float('inf'))
+	parser.add_argument("--time_limit", help="abandon count accumulation when time elapsed is greater than this (sec)", type=float, default=float('inf'))
 	args = parser.parse_args()
 
 	run_amdtk_nc(args)
