@@ -11,90 +11,7 @@ from .nmi import tot_nmi, tot_ami
 from ..io import read_htk
 from .vis_edits import heatmap, visualize_edits
 from ..shared.stats import collect_data_stats_by_speaker, accumulate_stats_by_speaker
-
-
-
-timit_phone_symbols = [
-'b',
-'d',
-'g',
-'p',
-'t',
-'k',
-'bcl',
-'dcl',
-'gcl',
-'pcl',
-'tcl',
-'kcl',
-'dx',
-'q',
-'jh',
-'ch',
-'s',
-'sh',
-'z',
-'zh',
-'f',
-'th',
-'v',
-'dh',
-'m',
-'n',
-'ng',
-'em',
-'en',
-'eng',
-'nx',
-'l',
-'r',
-'w',
-'y',
-'hh',
-'hv',
-'el',
-'iy',
-'ih',
-'eh',
-'ey',
-'ae',
-'aa',
-'aw',
-'ay',
-'ah',
-'ao',
-'oy',
-'ow',
-'uh',
-'uw',
-'ux',
-'er',
-'ax',
-'ix',
-'axr',
-'ax-h',
-'oo' ]
-
-timit_silence_symbols = [
-'',
-'sil',
-'pau',
-'epi',
-'h#',
-'sp'
-]
-
-phone_to_int = {}
-
-for i, phone in enumerate(timit_phone_symbols):
-	phone_to_int[phone] = i
-
-n_items = len(phone_to_int.items())
-for i, silence in enumerate(timit_silence_symbols):
-	phone_to_int[silence] = n_items
-
-int_to_phone = {v: k for k, v in phone_to_int.items()}
-
+from ..shared.phones import TIMIT_phones
 
 
 def frame_labeling_accuracy(model_frame_labels, gold_standard_frame_labels, model_to_gold):
@@ -221,8 +138,6 @@ def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one
 
 		for utt in decoded_utterances:
 
-			print('utt: ', utt)
-
 			fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals = utt
 
 			# plot each file's edits 
@@ -257,7 +172,7 @@ def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one
 		correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, correspond_output_file)
 
 		edit_op_output_file = os.path.join(model_output_dir, 'edit_ops_{}.txt'.format(os.path.basename(model_path)))
-		edit_op_analysis(edit_ops_all, max(phone_to_int.values()), edit_op_output_file)
+		edit_op_analysis(edit_ops_all, max(TIMIT_phones.phone_to_int.values()), edit_op_output_file)
 
 		# print(pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all))
 
@@ -375,7 +290,7 @@ def edit_op_analysis(edit_ops_all, n_true_types, output_file):
 				sum([ x[0] for x in relevant_ibs ]) + \
 				sum([ x[0] for x in relevant_its ])
 
-			f1.write('\n\nMost common operations for phone "{}":\n'.format(int_to_phone[i]))
+			f1.write('\n\nMost common operations for phone "{}":\n'.format(TIMIT_phones.int_to_phone[i]))
 			for v,k in relevant_subs[:10]:
 				f1.write('    SUB {} ({}%)\n'.format(k[2], (v/relevant_sum)*100))
 			for v,k in relevant_ibs[:10]:
@@ -407,7 +322,7 @@ def correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, output
 			corresponds_to_pairs = [ (x,i) for i, x in enumerate(corresponds_to) if x > 0 ]
 			corresponds_to_pairs.sort(reverse=True)
 
-			f1.write('Phone "{}" (n={}) corresponds to discovered PLU labels...\n'.format(int_to_phone[true_type], total))
+			f1.write('Phone "{}" (n={}) corresponds to discovered PLU labels...\n'.format(TIMIT_phones.int_to_phone[true_type], total))
 			[ f1.write('    {}, n={}, {}%\n'.format(pred_type, count, (count/total)*100)) for count, pred_type in corresponds_to_pairs[:10] ]
 			f1.write('\n')
 
@@ -420,7 +335,7 @@ def correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, output
 			corresponds_to_pairs.sort(reverse=True)
 
 			f1.write('Discovered PLU {} (n={}) corresponds to phones...\n'.format(pred_type, total))
-			[ f1.write('    "{}", n={}, {}%\n'.format(int_to_phone[true_type], count, (count/total)*100)) for count, true_type in corresponds_to_pairs[:10] ]
+			[ f1.write('    "{}", n={}, {}%\n'.format(TIMIT_phones.int_to_phone[true_type], count, (count/total)*100)) for count, true_type in corresponds_to_pairs[:10] ]
 			f1.write('\n')
 
 
@@ -457,7 +372,7 @@ def read_tg(path, n_frames):
 		tg_frame_labels[frame_index] = interval_label
 		time += frame_length
 
-	tg_frame_labels = [phone_to_int[x.lower()] for x in tg_frame_labels]
+	tg_frame_labels = [TIMIT_phones.phone_to_int[x.lower()] for x in tg_frame_labels]
 
 	return tg_frame_labels
 

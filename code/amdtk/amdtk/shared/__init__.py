@@ -5,4 +5,5 @@ features to automatically discover phone-like units.
 
 """
 from .stats import *
+from .phones import * 
 
