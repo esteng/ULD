@@ -1,0 +1,13 @@
+Run started at 2018-07-31_18:25:56
+Audio dir: /Users/Elias/ULD/audio/icicles
+Evaluation audio dir: /Users/Elias/ULD/audio/icicles
+Epochs: 1
+Batch size: 4
+Learning rate: 0.01
+Audio samples per sec: 100
+PLU bottom types: 4
+Max slip factor: 0.2
+Number of components per state: 2
+PLU top limit: inf
+Memory limit: inf M
+Time limit: inf sec

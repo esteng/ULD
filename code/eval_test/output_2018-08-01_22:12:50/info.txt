@@ -1,0 +1,13 @@
+Run started at 2018-08-01_22:12:50
+Audio dir: /Users/Elias/ULD/audio/T1
+Evaluation audio dir: /Users/Elias/ULD/audio/T1
+Epochs: 1
+Batch size: 4
+Learning rate: 0.01
+Audio samples per sec: 100
+PLU bottom types: 4
+Max slip factor: 0.2
+Number of components per state: 2
+PLU top limit: inf
+Memory limit: inf M
+Time limit: inf sec

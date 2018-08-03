@@ -1,0 +1,113 @@
+PLU tops: 40
+PLU bottom types: 4
+Frames: 39
+Max slip factor: 0.2
+
+Start time: 2018-07-31_21:44:24
+
+
+FORWARD
+PLU bottom index: -1	time: 0	mem: 151.33 M
+PLU bottom index: 0	time: 0	mem: 149.83 M
+PLU bottom index: 1	time: 1	mem: 150.82 M
+PLU bottom index: 2	time: 1	mem: 152.44 M
+PLU bottom index: 3	time: 2	mem: 157.56 M
+PLU bottom index: 4	time: 3	mem: 160.35 M
+PLU bottom index: 5	time: 4	mem: 169.55 M
+PLU bottom index: 6	time: 6	mem: 173.19 M
+PLU bottom index: 7	time: 7	mem: 177.32 M
+PLU bottom index: 8	time: 9	mem: 193.88 M
+PLU bottom index: 9	time: 10	mem: 198.66 M
+PLU bottom index: 10	time: 12	mem: 203.68 M
+PLU bottom index: 11	time: 14	mem: 208.92 M
+PLU bottom index: 12	time: 16	mem: 238.41 M
+PLU bottom index: 13	time: 18	mem: 244.12 M
+PLU bottom index: 14	time: 20	mem: 250.02 M
+PLU bottom index: 15	time: 22	mem: 255.91 M
+PLU bottom index: 16	time: 24	mem: 261.82 M
+PLU bottom index: 17	time: 26	mem: 267.71 M
+PLU bottom index: 18	time: 29	mem: 273.62 M
+PLU bottom index: 19	time: 31	mem: 327.52 M
+PLU bottom index: 20	time: 33	mem: 333.42 M
+PLU bottom index: 21	time: 35	mem: 339.32 M
+PLU bottom index: 22	time: 37	mem: 345.28 M
+PLU bottom index: 23	time: 39	mem: 351.18 M
+PLU bottom index: 24	time: 41	mem: 357.07 M
+PLU bottom index: 25	time: 43	mem: 362.97 M
+PLU bottom index: 26	time: 45	mem: 368.97 M
+PLU bottom index: 27	time: 47	mem: 375.07 M
+PLU bottom index: 28	time: 49	mem: 381.26 M
+PLU bottom index: 29	time: 51	mem: 387.56 M
+PLU bottom index: 30	time: 53	mem: 393.95 M
+PLU bottom index: 31	time: 55	mem: 400.21 M
+PLU bottom index: 32	time: 57	mem: 405.99 M
+PLU bottom index: 33	time: 59	mem: 507.07 M
+PLU bottom index: 34	time: 60	mem: 511.50 M
+PLU bottom index: 35	time: 61	mem: 515.33 M
+PLU bottom index: 36	time: 62	mem: 518.59 M
+PLU bottom index: 37	time: 63	mem: 521.33 M
+PLU bottom index: 38	time: 64	mem: 523.60 M
+PLU bottom index: 39	time: 64	mem: 525.45 M
+PLU bottom index: 40	time: 65	mem: 526.91 M
+PLU bottom index: 41	time: 65	mem: 528.02 M
+PLU bottom index: 42	time: 65	mem: 528.81 M
+PLU bottom index: 43	time: 65	mem: 529.32 M
+PLU bottom index: 44	time: 65	mem: 529.61 M
+PLU bottom index: 45	time: 65	mem: 529.75 M
+PLU bottom index: 46	time: 65	mem: 529.77 M
+PLU bottom index: 47	time: 65	mem: 529.77 M
+
+BACKWARD
+PLU bottom index: 47	time: 65	mem: 529.87 M
+PLU bottom index: 46	time: 65	mem: 529.87 M
+PLU bottom index: 45	time: 65	mem: 529.87 M
+PLU bottom index: 44	time: 65	mem: 529.89 M
+PLU bottom index: 43	time: 65	mem: 529.91 M
+PLU bottom index: 42	time: 66	mem: 529.95 M
+PLU bottom index: 41	time: 66	mem: 529.95 M
+PLU bottom index: 40	time: 66	mem: 529.95 M
+PLU bottom index: 39	time: 66	mem: 529.95 M
+PLU bottom index: 38	time: 67	mem: 529.95 M
+PLU bottom index: 37	time: 67	mem: 529.95 M
+PLU bottom index: 36	time: 68	mem: 529.95 M
+PLU bottom index: 35	time: 68	mem: 529.95 M
+PLU bottom index: 34	time: 69	mem: 529.95 M
+PLU bottom index: 33	time: 70	mem: 529.95 M
+PLU bottom index: 32	time: 71	mem: 529.95 M
+PLU bottom index: 31	time: 73	mem: 529.95 M
+PLU bottom index: 30	time: 74	mem: 529.95 M
+PLU bottom index: 29	time: 76	mem: 529.95 M
+PLU bottom index: 28	time: 77	mem: 529.95 M
+PLU bottom index: 27	time: 79	mem: 529.95 M
+PLU bottom index: 26	time: 81	mem: 529.95 M
+PLU bottom index: 25	time: 82	mem: 529.95 M
+PLU bottom index: 24	time: 84	mem: 529.95 M
+PLU bottom index: 23	time: 86	mem: 529.95 M
+PLU bottom index: 22	time: 88	mem: 529.95 M
+PLU bottom index: 21	time: 89	mem: 529.95 M
+PLU bottom index: 20	time: 91	mem: 529.95 M
+PLU bottom index: 19	time: 93	mem: 529.95 M
+PLU bottom index: 18	time: 94	mem: 529.95 M
+PLU bottom index: 17	time: 96	mem: 529.95 M
+PLU bottom index: 16	time: 98	mem: 529.95 M
+PLU bottom index: 15	time: 100	mem: 529.95 M
+PLU bottom index: 14	time: 101	mem: 529.95 M
+PLU bottom index: 13	time: 103	mem: 529.95 M
+PLU bottom index: 12	time: 105	mem: 529.95 M
+PLU bottom index: 11	time: 106	mem: 529.95 M
+PLU bottom index: 10	time: 108	mem: 529.95 M
+PLU bottom index: 9	time: 110	mem: 529.95 M
+PLU bottom index: 8	time: 112	mem: 529.95 M
+PLU bottom index: 7	time: 113	mem: 529.95 M
+PLU bottom index: 6	time: 115	mem: 529.95 M
+PLU bottom index: 5	time: 116	mem: 529.95 M
+PLU bottom index: 4	time: 117	mem: 529.95 M
+PLU bottom index: 3	time: 118	mem: 529.95 M
+PLU bottom index: 2	time: 119	mem: 529.95 M
+PLU bottom index: 1	time: 120	mem: 529.95 M
+PLU bottom index: 0	time: 121	mem: 529.95 M
+PLU bottom index: -1	time: 121	mem: 529.95 M
+
+End time: 2018-07-31_21:46:26
+Elapsed time: 122.43108797073364
+DONE

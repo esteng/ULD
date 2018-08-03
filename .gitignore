@@ -9,7 +9,11 @@ writeups/MTL-AI-abstract/abstract.pdf
 
 # Ignore search index files generated on Mac
 *.DS_Store
-
+writeups/MTL-AI-abstract/abstract.dvi
+writeups/noisy-channel/noisy-channel.fdb_latexmk
+writeups/noisy-channel/noisy-channel.fls
+writeups/thesis/thesis.fdb_latexmk
+writeups/thesis/thesis.fls
 writeups/MTL-AI-abstract/abstract.dvi
 
 # Ignore __pycache__ directories
@@ -18,3 +22,20 @@ writeups/MTL-AI-abstract/abstract.dvi
 # Ignore textgrids directories
 /**/textgrids*
 
+# Ignore pickled model files
+code/batch*
+
+# Ignore old logfiles
+code/test_example/old_*
+
+# Ignore IPython notebook checkpoints
+code/test_example/.ipynb_checkpoints/*
+
+# Ignore amdtk build directory
+code/amdtk/build/
+
+# Ignore some random latex files
+writeups/noisy-channel/pad_rules.fdb_latexmk
+writeups/noisy-channel/pad_rules.fls
+
+writeups/noisy-channel/noisy-channel.pdf

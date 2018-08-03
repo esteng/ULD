@@ -1,0 +1,187 @@
+Phone "" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "aa" (n=10.0) corresponds to discovered PLU labels...
+    2, n=6.0, 60.0%
+    0, n=4.0, 40.0%
+
+Phone "ae" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "ah" (n=5.0) corresponds to discovered PLU labels...
+    2, n=3.0, 60.0%
+    0, n=2.0, 40.0%
+
+Phone "ao" (n=34.0) corresponds to discovered PLU labels...
+    2, n=31.0, 91.17647058823529%
+    0, n=2.0, 5.88235294117647%
+    1, n=1.0, 2.941176470588235%
+
+Phone "aw" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "ay" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "b" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "ch" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "d" (n=1.0) corresponds to discovered PLU labels...
+    2, n=1.0, 100.0%
+
+Phone "dcl" (n=11.0) corresponds to discovered PLU labels...
+    2, n=8.0, 72.72727272727273%
+    1, n=3.0, 27.27272727272727%
+
+Phone "dh" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "dx" (n=3.0) corresponds to discovered PLU labels...
+    0, n=2.0, 66.66666666666666%
+    2, n=1.0, 33.33333333333333%
+
+Phone "eh" (n=7.0) corresponds to discovered PLU labels...
+    0, n=4.0, 57.14285714285714%
+    1, n=2.0, 28.57142857142857%
+    2, n=1.0, 14.285714285714285%
+
+Phone "er" (n=27.0) corresponds to discovered PLU labels...
+    0, n=19.0, 70.37037037037037%
+    2, n=8.0, 29.629629629629626%
+
+Phone "ey" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "epi" (n=5.0) corresponds to discovered PLU labels...
+    2, n=3.0, 60.0%
+    0, n=2.0, 40.0%
+
+Phone "f" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "g" (n=4.0) corresponds to discovered PLU labels...
+    2, n=3.0, 75.0%
+    0, n=1.0, 25.0%
+
+Phone "gcl" (n=6.0) corresponds to discovered PLU labels...
+    0, n=6.0, 100.0%
+
+Phone "hh" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "ih" (n=8.0) corresponds to discovered PLU labels...
+    0, n=8.0, 100.0%
+
+Phone "iy" (n=22.0) corresponds to discovered PLU labels...
+    2, n=18.0, 81.81818181818183%
+    0, n=4.0, 18.181818181818183%
+
+Phone "jh" (n=4.0) corresponds to discovered PLU labels...
+    2, n=4.0, 100.0%
+
+Phone "k" (n=2.0) corresponds to discovered PLU labels...
+    2, n=2.0, 100.0%
+
+Phone "kcl" (n=6.0) corresponds to discovered PLU labels...
+    2, n=6.0, 100.0%
+
+Phone "l" (n=4.0) corresponds to discovered PLU labels...
+    0, n=4.0, 100.0%
+
+Phone "m" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "n" (n=4.0) corresponds to discovered PLU labels...
+    0, n=4.0, 100.0%
+
+Phone "ng" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "ow" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "oy" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "p" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "q" (n=25.0) corresponds to discovered PLU labels...
+    2, n=18.0, 72.0%
+    0, n=7.0, 28.000000000000004%
+
+Phone "r" (n=9.0) corresponds to discovered PLU labels...
+    2, n=9.0, 100.0%
+
+Phone "s" (n=23.0) corresponds to discovered PLU labels...
+    0, n=12.0, 52.17391304347826%
+    2, n=11.0, 47.82608695652174%
+
+Phone "sh" (n=20.0) corresponds to discovered PLU labels...
+    2, n=19.0, 95.0%
+    0, n=1.0, 5.0%
+
+Phone "t" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "th" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "uh" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "uw" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "ux" (n=10.0) corresponds to discovered PLU labels...
+    0, n=4.0, 40.0%
+    2, n=3.0, 30.0%
+    1, n=3.0, 30.0%
+
+Phone "v" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "w" (n=14.0) corresponds to discovered PLU labels...
+    1, n=10.0, 71.42857142857143%
+    2, n=2.0, 14.285714285714285%
+    0, n=2.0, 14.285714285714285%
+
+Phone "y" (n=12.0) corresponds to discovered PLU labels...
+    1, n=10.0, 83.33333333333334%
+    0, n=2.0, 16.666666666666664%
+
+Phone "z" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "zh" (n=0.0) corresponds to discovered PLU labels...
+
+Phone "h#" (n=27.0) corresponds to discovered PLU labels...
+    0, n=19.0, 70.37037037037037%
+    1, n=6.0, 22.22222222222222%
+    2, n=2.0, 7.4074074074074066%
+
+Phone "hv" (n=6.0) corresponds to discovered PLU labels...
+    2, n=6.0, 100.0%
+
+
+
+====================================================================
+
+Discovered PLU 0 (n=109.0) corresponds to phones...
+    "h#", n=19.0, 17.431192660550458%
+    "er", n=19.0, 17.431192660550458%
+    "s", n=12.0, 11.009174311926607%
+    "ih", n=8.0, 7.339449541284404%
+    "q", n=7.0, 6.422018348623854%
+    "gcl", n=6.0, 5.5045871559633035%
+    "ux", n=4.0, 3.669724770642202%
+    "n", n=4.0, 3.669724770642202%
+    "l", n=4.0, 3.669724770642202%
+    "iy", n=4.0, 3.669724770642202%
+
+Discovered PLU 1 (n=35.0) corresponds to phones...
+    "y", n=10.0, 28.57142857142857%
+    "w", n=10.0, 28.57142857142857%
+    "h#", n=6.0, 17.142857142857142%
+    "ux", n=3.0, 8.571428571428571%
+    "dcl", n=3.0, 8.571428571428571%
+    "eh", n=2.0, 5.714285714285714%
+    "ao", n=1.0, 2.857142857142857%
+    "hv", n=0.0, 0.0%
+    "zh", n=0.0, 0.0%
+    "z", n=0.0, 0.0%
+
+Discovered PLU 2 (n=165.0) corresponds to phones...
+    "ao", n=31.0, 18.787878787878785%
+    "sh", n=19.0, 11.515151515151516%
+    "q", n=18.0, 10.909090909090908%
+    "iy", n=18.0, 10.909090909090908%
+    "s", n=11.0, 6.666666666666667%
+    "r", n=9.0, 5.454545454545454%
+    "er", n=8.0, 4.848484848484849%
+    "dcl", n=8.0, 4.848484848484849%
+    "hv", n=6.0, 3.6363636363636362%
+    "kcl", n=6.0, 3.6363636363636362%
+

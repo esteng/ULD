@@ -1,0 +1,186 @@
+32 substitutes (0.8%)
+0 insert bottoms (0.0%)
+8 insert tops (0.2%)
+
+
+
+
+Most common operations for phone "":
+    SUB 2 (100.0%)
+
+
+Most common operations for phone "aa":
+    SUB 1 (66.66666666666666%)
+    SUB 0 (33.33333333333333%)
+
+
+Most common operations for phone "ae":
+    SUB 2 (100.0%)
+
+
+Most common operations for phone "ah":
+    IT 0 (100.0%)
+
+
+Most common operations for phone "ao":
+    SUB 1 (50.0%)
+    SUB 0 (50.0%)
+
+
+Most common operations for phone "aw":
+    SUB 2 (100.0%)
+
+
+Most common operations for phone "ay":
+    IT 0 (100.0%)
+
+
+Most common operations for phone "b":
+    SUB 0 (100.0%)
+
+
+Most common operations for phone "ch":
+    SUB 0 (50.0%)
+    IT 1 (50.0%)
+
+
+Most common operations for phone "d":
+    SUB 2 (100.0%)
+
+
+Most common operations for phone "dcl":
+    SUB 0 (100.0%)
+
+
+Most common operations for phone "dh":
+    SUB 0 (50.0%)
+    IT 1 (50.0%)
+
+
+Most common operations for phone "dx":
+    SUB 0 (100.0%)
+
+
+Most common operations for phone "eh":
+    SUB 1 (100.0%)
+
+
+Most common operations for phone "er":
+    SUB 0 (100.0%)
+
+
+Most common operations for phone "ey":
+    SUB 2 (66.66666666666666%)
+    IT 2 (33.33333333333333%)
+
+
+Most common operations for phone "epi":
+    IT 1 (100.0%)
+
+
+Most common operations for phone "f":
+    SUB 2 (100.0%)
+
+
+Most common operations for phone "g":
+    SUB 0 (100.0%)
+
+
+Most common operations for phone "gcl":
+    SUB 1 (100.0%)
+
+
+Most common operations for phone "hh":
+    SUB 2 (100.0%)
+
+
+Most common operations for phone "ih":
+    SUB 2 (50.0%)
+    SUB 1 (50.0%)
+
+
+Most common operations for phone "iy":
+    SUB 0 (50.0%)
+    IT 2 (50.0%)
+
+
+Most common operations for phone "jh":
+    SUB 0 (50.0%)
+    IT 2 (50.0%)
+
+
+Most common operations for phone "k":
+    SUB 2 (100.0%)
+
+
+Most common operations for phone "kcl":
+    SUB 0 (100.0%)
+
+
+Most common operations for phone "l":
+    SUB 2 (50.0%)
+    SUB 0 (50.0%)
+
+
+Most common operations for phone "m":
+    SUB 0 (100.0%)
+
+
+Most common operations for phone "n":
+
+
+Most common operations for phone "ng":
+
+
+Most common operations for phone "ow":
+
+
+Most common operations for phone "oy":
+
+
+Most common operations for phone "p":
+
+
+Most common operations for phone "q":
+
+
+Most common operations for phone "r":
+
+
+Most common operations for phone "s":
+
+
+Most common operations for phone "sh":
+
+
+Most common operations for phone "t":
+
+
+Most common operations for phone "th":
+
+
+Most common operations for phone "uh":
+
+
+Most common operations for phone "uw":
+
+
+Most common operations for phone "ux":
+
+
+Most common operations for phone "v":
+
+
+Most common operations for phone "w":
+
+
+Most common operations for phone "y":
+
+
+Most common operations for phone "z":
+
+
+Most common operations for phone "zh":
+
+
+Most common operations for phone "h#":

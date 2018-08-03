@@ -1,0 +1,50 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.5in]{geometry}
+\setlength\parindent{0pt}
+\setlength\parskip{0.2cm}
+\usepackage{amsmath, amssymb}
+\usepackage{bm}
+
+
+\newcommand{\bs}{\boldsymbol}
+\newcommand{\myindent}{\hspace{2cm}}
+
+
+\begin{document}
+
+\begin{center}
+	
+	{\Large \textbf{HMM expected counts}}
+
+	{\normalsize Emily Kellison-Linn, Tim O'Donnell, Elias Stengel-Eskin}
+			
+\end{center}
+
+\section{Expected counts}
+
+Say we would like to compute the expected count of a particular HMM state given model parameters $\theta$ and some data $x$. 
+
+We can write this as 
+
+\myindent $\mathbb{E}_{z\sim p(z|x,\theta)}[f_i(z)]$
+
+where $f_i(z)$ is a function over state sequences $z$ which returns the number of occurrences of state $i$ in a state sequence.
+
+We can define $f_i(z)$ as
+
+\myindent $f_i(z) = \sum_{t=1}^{T}\delta_{i,t}(z)$
+
+where $\delta_{i,t}(z)$ is a delta function that returns 1 if there is an occurence of state $i$ at time $t$ in $z$ and 0 otherwise.
+
+The full expected value then becomes 
+
+\myindent $\mathbb{E}_{z\sim p(z|x,\theta)}[f_i(z)] = \sum_{z} [p(z|x,\theta)f_i(z)]$
+
+\myindent $=\sum_z [p(z|x,\theta) \sum_{t=1}^{T} \delta_{i,t}(z) ]$
+
+\myindent $= \sum_{t=1}^{T} \sum_z p(z|x,\theta) \delta_{i,t}(z)$
+
+\myindent $= \sum_{t=1}^{T} \sum_z \frac{p(z,x|\theta)}{p(x|\theta)} \delta_{i,t}(z)$
+
+
+\end{document}

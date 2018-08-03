@@ -235,6 +235,11 @@ print('Connected to', len(dview), 'jobs.')
 
 print("done importing!")
 
+audio_dir = '../audio/icicles'
+# audio_dir = '../audio/FAEM0'
+# audio_dir = '../audio/FAEM0'
+
+
 # audio_dir = '../audio/icicles'
 #audio_dir = '../audio/FAEM0'
 #audio_dir = '../audio/TIMIT/FAEM0'
