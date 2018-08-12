@@ -1,6 +1,12 @@
 
 class TIMIT_phones:
 
+	# List of lists of phone symbols in TIMIT.
+	# The first symbol in each list is the one used in the textgrids
+	# (they have been preprocessed to substitute the latter symbols for the first symbol).
+	# The other symbols are included either for reference, or because they appear in
+	# the pronunciation dictionary and are therefore needed to construct the top-level phone strings.
+
 	__phone_symbols__ = [
 		['','sil','sp'],
 		['aa'],
@@ -24,9 +30,9 @@ class TIMIT_phones:
 		['iy'],
 		['jh'],
 		['k'],
-		['l','el'],
-		['m'],
-		['n'],
+		['l', 'el'],
+		['m', 'em'],
+		['n', 'en'],
 		['ng'],
 		['ow'],
 		['oy'],
@@ -54,5 +60,6 @@ class TIMIT_phones:
 		for phone in phone_set:
 			phone_to_int[phone] = i
 
+	# Make sure the two lookup dictionaries are consistent
 	for integer, phone in int_to_phone.items():
 		assert(phone_to_int[phone]==integer)
