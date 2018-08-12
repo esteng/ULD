@@ -49,20 +49,22 @@ def boundary_precision(model_frame_labels, gold_standard_frame_labels):
 def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one_model=False, write_textgrids=False, corpus='timit'):
 	
 	print('Evaluating on audio in directory: ', audio_dir)
-
-	if not one_model:
-		# Load model(s)
-		models = []
-		for dirpath, dirnames, filenames in os.walk(model_dir):
-			for filename in filenames:
-				if filename.lower().endswith(".pkl"):
-					model_path = os.path.join(dirpath, filename)
-					model = pickle.load(open(model_path,"rb"))
-					models.append((model, model_path))
-	# only load one model
+	if type(model_dir) != str:
+		models = [(model_dir,"")]
 	else:
-		model = pickle.load(open(model_dir, 'rb'))
-		models = [(model, model_dir)]
+		if not one_model:
+			# Load model(s)
+			models = []
+			for dirpath, dirnames, filenames in os.walk(model_dir):
+				for filename in filenames:
+					if filename.lower().endswith(".pkl"):
+						model_path = os.path.join(dirpath, filename)
+						model = pickle.load(open(model_path,"rb"))
+						models.append((model, model_path))
+		# only load one model
+		else:
+			model = pickle.load(open(model_dir, 'rb'))
+			models = [(model, model_dir)]
 
 
 	try:
@@ -139,7 +141,7 @@ def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one
 		for utt in decoded_utterances:
 
 			fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals = utt
-
+			print(edit_ops)
 			# plot each file's edits 
 			filename = os.path.split(fea_path)[-1].split(".")[0]
 			visualize_edits(edit_ops, os.path.join(output_dir, "plots", os.path.basename(model_path), "{}-cor.png".format(filename)))
@@ -389,5 +391,5 @@ def read_tg(path, n_frames):
 # 	parser.add_argument("audio_dir",  help="path to audio directory to evaluate on")
 # 	args = parser.parse_args()
 	
-	evaluate_model(args.model_path, args.audio_dir)
+	# evaluate_model(args.model_path, args.audio_dir)
 
