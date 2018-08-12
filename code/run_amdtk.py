@@ -154,7 +154,11 @@ fig1 = figure(
 )
 x = np.arange(0, len(elbo), 1)
 fig1.line(x, elbo)
-#show(fig1)
+show(fig1)
+
+print("***ELBO***")
+for i, n in enumerate(elbo):
+    print('Epoch '+str(i)+': ELBO='+str(n))
 
 print("\nDECODING\n")
 
@@ -216,7 +220,7 @@ for path in paths:
     # print_bar_graph(counts_by_duration)
 
 
-    write_textgrids = True
+    write_textgrids = False
 
     if write_textgrids:
         output_dir = os.path.join('..', 'audio', date_string)

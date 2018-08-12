@@ -1,12 +1,17 @@
 ipcluster stop;
 cd amdtk;
-python setup.py install;
+python3 setup.py install --force;
 cd ..;
 echo "STARTING ENGINES";
 ipcluster start --profile default -n 4 --daemonize;
 sleep 10;
 echo "ENGINES STARTED";
 echo "RUNNING";
+<<<<<<< Updated upstream
 python run_amdtk_nc.py 70 10 ../audio/TIMIT/FADG0 ../audio/TIMIT/FADG0 output/FADG0 | sed "s,\x1[Bb]\[[0-9;]*[a-zA-Z],,g" > debug.txt;
+=======
+python3 -u run_amdtk_nc.py --bottom_plu_count=10 --n_epochs=1 --n_comp=4 --max_slip_factor=0.1 --audio_dir=../audio/icicles --eval_dir=../audio/icicles --output_dir=output --batch-size=4 --time_limit 120;
+#| sed "s,\x1[Bb]\[[0-9;]*[a-zA-Z],,g" > debug.txt;
+>>>>>>> Stashed changes
 echo "DONE";
 ipcluster stop;
