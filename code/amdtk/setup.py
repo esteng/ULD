@@ -14,6 +14,7 @@ setup(
         'amdtk/densities',
         'amdtk/evals',
         'amdtk/models',
+        'amdtk/shared',
         'amdtk/training'
     ],
     license='MIT')

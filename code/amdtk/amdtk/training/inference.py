@@ -42,7 +42,8 @@ class Optimizer(metaclass=abc.ABCMeta):
 				from amdtk import read_htk
 				import _pickle as pickle
 				import os
-
+				import time
+		self.lrate = float(args.get('lrate', 0.01))
 		self.epochs = int(args.get('epochs', 1))
 		self.batch_size = int(args.get('batch_size', 2))
 		self.audio_dir = args.get("audio_dir",None)
@@ -50,22 +51,43 @@ class Optimizer(metaclass=abc.ABCMeta):
 		self.audio_samples_per_sec = args.get("audio_samples_per_sec",None)
 		self.output_dir = args.get("output_dir", None)
 		if self.output_dir is not None:
-			self.this_output_dir = os.path.join(self.output_dir, time.strftime("output_%Y-%m-%d_%H:%M:%S"))
+			run_start_time = time.strftime("%Y-%m-%d_%H:%M:%S")
+			self.this_output_dir = os.path.join(self.output_dir, "output_"+run_start_time)
 			os.makedirs(self.this_output_dir)
 			print("Created output directory at", self.this_output_dir)
+			self.info_file = os.path.join(self.this_output_dir, 'info.txt')
+			with open(self.info_file, 'w') as f:
+				f.write('Run started at {}\n'.format(run_start_time))
+				f.write('Audio dir: {}\n'.format(self.audio_dir))
+				f.write('Evaluation audio dir: {}\n'.format(self.eval_audio_dir))
+				f.write('Epochs: {}\n'.format(self.epochs))
+				f.write('Batch size: {}\n'.format(self.batch_size))
+				f.write('Learning rate: {}\n'.format(self.lrate))
+				f.write('Audio samples per sec: {}\n'.format(self.audio_samples_per_sec))
+				f.write('PLU bottom types: {}\n'.format(model.n_units))
+				f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
+				f.write('Number of components per state: {}\n'.format(model.n_comp_per_states))
+				f.write('PLU top limit: {}\n'.format(model.plu_top_limit))
+				f.write('Memory limit: {} M\n'.format(model.mem_limit))
+				f.write('Time limit: {} sec\n'.format(model.time_limit))
 			self.log_file = os.path.join(self.this_output_dir, 'logfile.log')
 			with open(self.log_file, "w") as f1:
-				f1.write('epoch\tminibatch\telbo\ttime\n')
+				f1.write('epoch\tminibatch\telbo\tn_files\tskipped\ttime\n')
 			self.eval_file = os.path.join(self.this_output_dir, 'eval.log')
 			with open(self.eval_file, "w") as f1:
 				f1.write('nmi\tami\tbound_precision\tbound_recall\tbound_f1\n')
 			self.pkl_dir = os.path.join(self.this_output_dir, 'pkl')
-			os.makedirs(self.pkl_dir)
+			os.mkdir(self.pkl_dir)
+			self.timing_dir = os.path.join(self.this_output_dir, 'timing')
+			os.mkdir(self.timing_dir)
 		else:
 			print("No output directory specified; no output will be produced.")
 		self.model = model
 		self.time_step = 0
 		self.data_stats = data_stats
+		self.start_epoch = 0
+		self.starting_batch = 0
+		self.tot_n_frames = sum([data_stats[x]['count'] for x in data_stats.keys()])
 		if self.dview is not None:
 			self.dview.push({
 				'data_stats': data_stats
@@ -75,9 +97,9 @@ class Optimizer(metaclass=abc.ABCMeta):
 		import _pickle as pickle
 		start_time = time.time()
 
-		for epoch in range(self.epochs):
+		for epoch in range(self.start_epoch, self.epochs):
 
-			# Shuffle the data to avoid cycle in the training.
+			# Shuffle the data to avoid cycle in the training
 			np_data = np.array(data, dtype=object)
 			idxs = np.arange(0, len(data))
 			np.random.shuffle(idxs)
@@ -87,16 +109,25 @@ class Optimizer(metaclass=abc.ABCMeta):
 			else:
 				batch_size = self.batch_size
 
-			for mini_batch in range(0, len(data), batch_size):
+			for mini_batch in range(self.starting_batch * batch_size, len(data), batch_size):
+
+				if self.timing_dir is not None:
+					self.curr_timing_dir = os.path.join(self.timing_dir, "epoch-{}-batch-{}".format(epoch, mini_batch))
+					os.mkdir(self.curr_timing_dir)
+					if self.dview is not None:
+						self.dview.push({
+							'curr_timing_dir': self.curr_timing_dir
+						})
 
 				batch_num = int(mini_batch / batch_size) + 1
 
 				self.time_step += 1
 
 				# Index of the data mini-batch.
+				#start = mini_batch
+				#end = mini_batch + batch_size
 				start = mini_batch
-				end = mini_batch + batch_size
-
+				end =  batch_size + mini_batch
 				# Reshaped the list of features.
 				fea_list = shuffled_data[start:end]
 				# print("batch_size: ", batch_size)
@@ -109,24 +140,35 @@ class Optimizer(metaclass=abc.ABCMeta):
 				objective = \
 					self.train(new_fea_list, epoch + 1, self.time_step)
 
-				# pickle model
-				if self.pkl_path is not None:
-					if not os.path.exists(self.pkl_path):
-						os.makedirs(self.pkl_path)
-					path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
-					with open(path_to_file, "wb") as f1:
-						pickle.dump(self.model, f1)
-					# evaluate model
-					with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
-						# res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
-										 # self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+				print('objective: ', objective)
 
-						nmi, ami, bound_prec, bound_rec, fval = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
-										 self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+				skipped = None
+				if isinstance(objective, tuple):
+					skipped = objective[1]
+					objective = objective[0]
 
-						f1.write("nmi,ami,prec,rec,f1\n")
-						f1.write("{},{},{},{},{}".format(nmi, ami, bound_prec, bound_rec, fval))
-						f1.write("\n")
+				# # pickle model
+				# if self.pkl_path is not None:
+				# 	if not os.path.exists(self.pkl_path):
+				# 		os.makedirs(self.pkl_path)
+				# 	path_to_file = os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch))
+				# 	print("about to pickle")
+				# 	print("path to file: {}".format(path_to_file))
+				# 	with open(path_to_file, "wb") as f1:
+				# 		pickle.dump(self.model, f1)
+
+				# 	# 
+					# # evaluate model
+					# with open("evals/eval-{}-{}".format(epoch, mini_batch), "w") as f1:
+					# 	# res_dict, pred_true,nmi = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+					# 					 # self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+
+					# 	nmi, ami, bound_prec, bound_rec, fval = evaluate_model(os.path.join(self.pkl_path,"epoch-{}-batch-{}".format(epoch, mini_batch)),\
+					# 					 self.audio_dir, self.output_dir, self.audio_samples_per_sec ,one_model=True, write_textgrids=False)
+
+					# 	f1.write("nmi,ami,prec,rec,f1\n")
+					# 	f1.write("{},{},{},{},{}".format(nmi, ami, bound_prec, bound_rec, fval))
+					# 	f1.write("\n")
 						
 
 				# Time since start
@@ -143,7 +185,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 
 					# write to log file
 					with open(self.log_file, "a") as f1:
-						f1.write(",".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective, time_elapsed]]))
+						f1.write("\t".join([str(x) for x in [epoch+1, int(mini_batch / batch_size) + 1, objective, len(new_fea_list), skipped, time_elapsed]]))
 						f1.write("\n")						
 					
 				# Monitor the convergence.
@@ -157,7 +199,7 @@ class Optimizer(metaclass=abc.ABCMeta):
 
 			# evaluate model (only once per epoch)
 			if self.output_dir is not None:
-				eval_stats = evaluate_model(model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
+				eval_stats = evaluate_model(dview=self.dview, model_dir=path_to_pkl_file, audio_dir=self.eval_audio_dir, 
 						output_dir=self.this_output_dir, samples_per_sec=self.audio_samples_per_sec, one_model=True, write_textgrids=True)
 				# write to eval file
 				with open(self.eval_file, "a") as f1:
@@ -348,13 +390,16 @@ class NoisyChannelOptimizer(Optimizer):
 		acc_stats = None
 		n_frames = 0
 
+		skipped = 0
+
 		for arg in args_list:
 			(fea_file, top_file) = arg
 
 			# Mean / Variance normalization.
 			data = read_htk(fea_file)
-			data -= data_stats['mean']
-			data /= np.sqrt(data_stats['var'])
+			speaker = os.path.split(os.path.split(fea_file)[0])[1]
+			data -= data_stats[speaker]['mean']
+			data /= np.sqrt(data_stats[speaker]['var'])
 
 			# Read top PLU sequence from file
 			with open(top_file, 'r') as f:
@@ -365,16 +410,46 @@ class NoisyChannelOptimizer(Optimizer):
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,accumulate=True, filename=fea_file)
 
-			exp_llh += np.sum(llh)
-			n_frames += len(data)
-			if acc_stats is None:
-				acc_stats = new_acc_stats
+			start_time = time.time()
+
+			if self.curr_timing_dir is not None:
+				curr_timing_file = os.path.join(self.curr_timing_dir, os.path.split(fea_file)[1][:-4])
+				curr_timing_file = curr_timing_file + '.txt'
+				with open(curr_timing_file, 'w') as f:
+					f.write('PLU tops: {}\n'.format(len(tops)))
+					f.write('PLU bottom types: {}\n'.format(model.n_units))
+					f.write('Frames: {}\n'.format(data.shape[1]))
+					f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
+					f.write('\n')
+					f.write('Start time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(start_time))))
+					f.write('\n')
 			else:
-				acc_stats += new_acc_stats
+				curr_timing_file = None
 
-		return (exp_llh, acc_stats, n_frames)    
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
+															 accumulate=True, filename=fea_file, output=curr_timing_file)
+			end_time = time.time()
+
+			if curr_timing_file is not None:
+				with open(curr_timing_file, 'a') as f:
+					f.write('\nEnd time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(end_time))))
+					f.write('Elapsed time: {}\n'.format(end_time-start_time))
+					f.write('DONE')
+
+			if llh is not None:
+				exp_llh += np.sum(llh)
+				n_frames += len(data)
+
+			if new_acc_stats is not None:	
+				if acc_stats is None:
+					acc_stats = new_acc_stats
+				else:
+					acc_stats += new_acc_stats
+			else:
+				skipped +=1
+
+		return (exp_llh, acc_stats, n_frames, skipped)    
 
 	def train(self, fea_list, epoch, time_step):
 
@@ -382,46 +457,59 @@ class NoisyChannelOptimizer(Optimizer):
 		self.dview.push({
 			'model': self.model,
 		})
-
-
+		import time
+		t0 = time.clock()
 		# Parallel accumulation of the sufficient statistics.
-		stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
-	                                 fea_list)
+		# stats_list = self.dview.map_sync(NoisyChannelOptimizer.e_step,
+		# 							 fea_list)
+		t1 = time.clock()- t0
+		print("ESTEP TOOK {}".format(t1))
 		# Serial version
-		# stats_list = []
-		# for pair in fea_list:
-		# 	stats_list.append(self.e_step_nonstatic(pair))
+		stats_list = []
+		for pair in fea_list:
+			stats_list.append(self.e_step_nonstatic(pair))
 
 		import time
 		# Accumulate the results from all the jobs.
 		exp_llh = stats_list[0][0]
 		acc_stats = stats_list[0][1]
-
-
 		n_frames = stats_list[0][2]
-		for val1, val2, val3 in stats_list[1:]:
+		skipped = stats_list[0][3]
+
+		for val1, val2, val3, val4 in stats_list[1:]:
 			exp_llh += val1
-			acc_stats += val2
+			if val2 is not None:
+				if acc_stats is None:
+					acc_stats = val2
+				else:
+					acc_stats += val2
 			n_frames += val3
+			skipped += val4
 
 		kl_div = self.model.kl_div_posterior_prior()
 
+		if n_frames == 0:
+			print('WARNING: Trained on 0 files.')
+			elbo = np.nan
+			return (elbo, skipped)
 
-		# Scale the statistics.
-		scale = self.data_stats['count'] / n_frames
-		acc_stats *= scale
-		self.model.natural_grad_update(acc_stats, self.lrate)
+		else:
 
-		elbo = (scale * exp_llh - kl_div) / self.data_stats['count']
+			# Scale the statistics.
+			scale = self.tot_n_frames / n_frames
+			acc_stats *= scale
+			self.model.natural_grad_update(acc_stats, self.lrate)
 
-		print('epoch: ', epoch)
-		print('scale: ', scale)
-		print('exp_llh: ', exp_llh)
-		print('kl_div: ', kl_div)
-		print('self.data_stats["count"]: ', self.data_stats['count'])
-		print('elbo: ', elbo)
+			elbo = (scale * exp_llh - kl_div) / self.tot_n_frames
 
-		return elbo
+			print('epoch: ', epoch)
+			print('scale: ', scale)
+			print('exp_llh: ', exp_llh)
+			print('kl_div: ', kl_div)
+			print('tot_n_frames: ', self.tot_n_frames)
+			print('elbo: ', elbo)
+
+		return (elbo, skipped)
 
 
 	@staticmethod
@@ -434,13 +522,16 @@ class NoisyChannelOptimizer(Optimizer):
 		acc_stats = None
 		n_frames = 0
 
+		skipped = 0
+
 		for arg in args_list:
 			(fea_file, top_file) = arg
 			# Mean / Variance normalization.
 			data = read_htk(fea_file)
-			data -= data_stats['mean']
+			speaker = os.path.split(os.path.split(fea_file)[0])[1]
+			data -= data_stats[speaker]['mean']
 
-			data /= numpy.sqrt(data_stats['var'])
+			data /= numpy.sqrt(data_stats[speaker]['var'])
 			# Read top PLU sequence from file
 			with open(top_file, 'r') as f:
 				data_str = f.read()
@@ -449,18 +540,46 @@ class NoisyChannelOptimizer(Optimizer):
 			# Get the accumulated sufficient statistics for the
 			# given set of features.
 			s_stats = model.get_sufficient_stats(data)
-			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
-															 accumulate=True, filename=fea_file)
 
-			exp_llh += numpy.sum(llh)
+			start_time = time.time()
 
-			n_frames += len(data)
-			if acc_stats is None:
-				acc_stats = new_acc_stats
+			if curr_timing_dir is not None:
+				curr_timing_file = os.path.join(curr_timing_dir, os.path.split(fea_file)[1][:-4])
+				curr_timing_file = curr_timing_file + '.txt'
+				with open(curr_timing_file, 'w') as f:
+					f.write('PLU tops: {}\n'.format(len(tops)))
+					f.write('PLU bottom types: {}\n'.format(model.n_units))
+					f.write('Frames: {}\n'.format(data.shape[1]))
+					f.write('Max slip factor: {}\n'.format(model.max_slip_factor))
+					f.write('\n')
+					f.write('Start time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(start_time))))
+					f.write('\n')
 			else:
-				acc_stats += new_acc_stats
+				curr_timing_file = None
 
-		return (exp_llh, acc_stats, n_frames)
+			posts, llh, new_acc_stats = model.get_posteriors(s_stats, tops,
+															 accumulate=True, filename=fea_file, output=curr_timing_file)
+			end_time = time.time()
+
+			if curr_timing_file is not None:
+				with open(curr_timing_file, 'a') as f:
+					f.write('\nEnd time: {}\n'.format(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime(end_time))))
+					f.write('Elapsed time: {}\n'.format(end_time-start_time))
+					f.write('DONE')
+
+			if llh is not None:
+				exp_llh += numpy.sum(llh)
+				n_frames += len(data)
+
+			if new_acc_stats is not None:	
+				if acc_stats is None:
+					acc_stats = new_acc_stats
+				else:
+					acc_stats += new_acc_stats
+			else:
+				skipped +=1
+
+		return (exp_llh, acc_stats, n_frames, skipped)
 
 
 class ToyNoisyChannelOptimizer(Optimizer):

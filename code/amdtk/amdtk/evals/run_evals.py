@@ -9,89 +9,9 @@ import amdtk
 from .cluster import segmentation_performance, pred_to_true_clustering, seq_to_bound
 from .nmi import tot_nmi, tot_ami
 from ..io import read_htk
-
-
-timit_phone_symbols = [
-'b',
-'d',
-'g',
-'p',
-'t',
-'k',
-'bcl',
-'dcl',
-'gcl',
-'pcl',
-'tcl',
-'kcl',
-'dx',
-'q',
-'jh',
-'ch',
-'s',
-'sh',
-'z',
-'zh',
-'f',
-'th',
-'v',
-'dh',
-'m',
-'n',
-'ng',
-'em',
-'en',
-'eng',
-'nx',
-'l',
-'r',
-'w',
-'y',
-'hh',
-'hv',
-'el',
-'iy',
-'ih',
-'eh',
-'ey',
-'ae',
-'aa',
-'aw',
-'ay',
-'ah',
-'ao',
-'oy',
-'ow',
-'uh',
-'uw',
-'ux',
-'er',
-'ax',
-'ix',
-'axr',
-'ax-h',
-'oo' ]
-
-timit_silence_symbols = [
-'',
-'sil',
-'pau',
-'epi',
-'h#',
-'sp'
-]
-
-phone_to_int = {}
-
-for i, phone in enumerate(timit_phone_symbols):
-	phone_to_int[phone] = i
-
-n_items = len(phone_to_int.items())
-for i, silence in enumerate(timit_silence_symbols):
-	phone_to_int[silence] = n_items
-
-int_to_phone = {v: k for k, v in phone_to_int.items()}
-
+from .vis_edits import heatmap, visualize_edits
+from ..shared.stats import collect_data_stats_by_speaker, accumulate_stats_by_speaker
+from ..shared.phones import TIMIT_phones
 
 
 def frame_labeling_accuracy(model_frame_labels, gold_standard_frame_labels, model_to_gold):
@@ -119,25 +39,39 @@ def boundary_precision(model_frame_labels, gold_standard_frame_labels):
 					correct += 1
 				total +=1
 
-	return correct/total
-
-
-
-def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=False, write_textgrids=False):
-	if not one_model:
-		# Load model(s)
-		models = []
-		for dirpath, dirnames, filenames in os.walk(model_dir):
-			for filename in filenames:
-				if filename.lower().endswith(".pkl"):
-					model_path = os.path.join(dirpath, filename)
-					model = pickle.load(open(model_path,"rb"))
-					models.append((model, model_path))
-	# only load one model
+	if total==0:
+		return np.nan
 	else:
-		model = pickle.load(open(model_dir, 'rb'))
-		models = [(model, model_dir)]
+		return correct/total
 
+
+
+def evaluate_model(dview, model_dir, audio_dir, output_dir, samples_per_sec, one_model=False, write_textgrids=False, corpus='timit'):
+	
+	print('Evaluating on audio in directory: ', audio_dir)
+	if type(model_dir) != str:
+		models = [(model_dir,"")]
+	else:
+		if not one_model:
+			# Load model(s)
+			models = []
+			for dirpath, dirnames, filenames in os.walk(model_dir):
+				for filename in filenames:
+					if filename.lower().endswith(".pkl"):
+						model_path = os.path.join(dirpath, filename)
+						model = pickle.load(open(model_path,"rb"))
+						models.append((model, model_path))
+		# only load one model
+		else:
+			model = pickle.load(open(model_dir, 'rb'))
+			models = [(model, model_dir)]
+
+
+	try:
+		os.mkdir(os.path.join(output_dir, "plots"))
+	except FileExistsError:
+		pass
+	
 	# Compile audio file paths
 	audio_dir = os.path.abspath(audio_dir)
 	fea_paths = []
@@ -152,10 +86,6 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 			if file.lower().endswith(".textgrid"):
 				textgrid_paths.append(os.path.join(root, file))
 
-	print('fea_paths:', fea_paths)
-	print('top_paths:', top_paths)
-	print('textgrid_paths:', textgrid_paths)
-
 	zipped_paths = list(zip(sorted(fea_paths), sorted(top_paths), sorted(textgrid_paths)))
 
 	for fea_file, top_file, textgrid_file in zipped_paths:
@@ -169,51 +99,52 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		if not os.path.exists(model_output_dir):
 			os.mkdir(model_output_dir)
 
+		if not os.path.exists(os.path.join(output_dir, "plots", os.path.basename(model_path))):
+			os.mkdir(os.path.join(output_dir, "plots", os.path.basename(model_path)))
+
 		pred_frame_labels_all = []
 		true_frame_labels_all = []
 		edit_ops_all = []
 
 		print("Evaluating model",model_path)
 
+		# Collect mean and variance of data
+		data_stats = dview.map_sync(collect_data_stats_by_speaker, fea_paths)
+
+		# Accumulate the statistics over all the utterances.
+		final_data_stats = accumulate_stats_by_speaker(data_stats)
+
 		# Decode the data using the model
-		for fea_path, top_path, textgrid_path in zipped_paths:
+		# decoded_utterances will be a list of tuples (pred_frame_labels, true_frame_labels, edit_ops)
+		decode_func = lambda x: file_decode(x, final_data_stats, model)
+		#decoded_utterances_all = dview.map_sync(decode_func, zipped_paths)
+
+		decoded_utterances_all = []
+		for path_trio in zipped_paths:
+			decoded_utterances_all.append(decode_func(path_trio))
 
 
-			data = read_htk(fea_path)
+		decoded_utterances = [x for x in decoded_utterances_all if not isinstance(x, str)]
+		error_msgs = [x for x in decoded_utterances_all if isinstance(x, str)]
 
-			# Normalize the data
-			data_mean = np.mean(data)
-			data_var = np.var(data)
-			data = (data-data_mean)/np.sqrt(data_var)
+		with open(os.path.join(model_output_dir, 'decode_errors.log'), 'w') as f:
+			f.write('skipped {} of {} eval files\n'.format(len(error_msgs), len(decoded_utterances_all)))
+			print(decoded_utterances_all)
+			for idx, val in enumerate(decoded_utterances_all):
+				if isinstance(val, str):
+					f.write('{}: {}\n'.format(os.path.basename(zipped_paths[idx][0]),val))
 
-			# Read top PLU sequence from file
-			with open(top_path, 'r') as f:
-				topstring = f.read()
-				tops = topstring.strip().split(',')
-				tops = [int(x) for x in tops]
+		pred_frame_labels_all = []
+		true_frame_labels_all = []
+		edit_ops_all = []
 
-			#result = model.decode(data, tops, state_path=False)
-			#result_path = model.decode(data, tops, state_path=True)
-			phone_intervals, edit_ops, hmm_states, plus = \
-					model.decode(data, tops, phone_intervals=True, 
-													edit_ops=True, hmm_states=True, plus=True)
-			pred_frame_labels = np.array(plus)
+		for utt in decoded_utterances:
 
-
-			# print("---")
-			# print("Predicted labels for file", fea_path, ":")
-			# print(pred_frame_labels)
-			# print("pred shape: ", pred_frame_labels.shape)
-
-			# Get the PLU labels from the textgrid
-			true_frame_labels = np.array(read_tg(textgrid_path, len(pred_frame_labels)))
-
-			# print("---")
-			# print("True labels from textgrid", textgrid_path, ":")
-			# print(true_frame_labels)
-			# print("true shape:", true_frame_labels.shape)
-
-			assert(len(pred_frame_labels)==len(true_frame_labels))
+			fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals = utt
+			print(edit_ops)
+			# plot each file's edits 
+			filename = os.path.split(fea_path)[-1].split(".")[0]
+			visualize_edits(edit_ops, os.path.join(output_dir, "plots", os.path.basename(model_path), "{}-cor.png".format(filename)))
 
 			pred_frame_labels_all.append(pred_frame_labels)
 			true_frame_labels_all.append(true_frame_labels)
@@ -228,6 +159,9 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 										os.path.join(tg_dir, os.path.split(fea_path)[1][:-4]+'.TextGrid'))
 
 
+		# plot heatmap
+		heatmap(edit_ops_all, os.path.join(output_dir, "plots", os.path.basename(model_path), "heatmap-{}.png".format(os.path.basename(model_path))))
+
 		pred_frame_labels_all = np.array(pred_frame_labels_all)
 		true_frame_labels_all = np.array(true_frame_labels_all)
 
@@ -240,7 +174,7 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, correspond_output_file)
 
 		edit_op_output_file = os.path.join(model_output_dir, 'edit_ops_{}.txt'.format(os.path.basename(model_path)))
-		edit_op_analysis(edit_ops_all, max(phone_to_int.values()), edit_op_output_file)
+		edit_op_analysis(edit_ops_all, max(TIMIT_phones.phone_to_int.values()), edit_op_output_file)
 
 		# print(pred_to_true_clustering(true_frame_labels_all, pred_frame_labels_all))
 
@@ -260,14 +194,70 @@ def evaluate_model(model_dir, audio_dir, output_dir, samples_per_sec, one_model=
 		bound_precision = boundary_precision(true_frame_labels_all, pred_frame_labels_all)
 		bound_recall = boundary_precision(pred_frame_labels_all, true_frame_labels_all)
 		bound_f1 = 2 * bound_precision * bound_recall / (bound_precision + bound_recall)
+		n_files = len(decoded_utterances_all)
+		skipped = len(error_msgs)
 		# with open(os.path.join(model_output_dir, "eval-stats-{}.txt".format(os.path.basename(model_path))), "w") as f1:
 		# 	f1.write("pred_true, nmi, bound_acc\n")
 		# 	f1.write("{}, {}, {}\n".format(pred_true, nmi, bound_acc))
 
-		return(nmi, ami, bound_precision, bound_recall, bound_f1)
+		return(nmi, ami, bound_precision, bound_recall, bound_f1, n_files, skipped)
+
+
+def file_decode(arg_list, data_stats, model):
+
+	if isinstance(arg_list[0], str):
+		arg_list = [arg_list]
+
+	# Need to re-import since this code will run remotely
+	import amdtk
+	import numpy as np
+
+	for fea_path, top_path, textgrid_path in arg_list:
+
+		# Read data from file
+		data = read_htk(fea_path)
+
+		speaker = os.path.split(os.path.split(fea_path)[0])[1]
+
+		# Normalize the data based on stats from the ENTIRE evaluation data
+		data -= data_stats[speaker]['mean']
+		data /= np.sqrt(data_stats[speaker]['var'])
+
+		# Read top PLU sequence from file
+		with open(top_path, 'r') as f:
+			topstring = f.read()
+			tops = topstring.strip().split(',')
+			tops = [int(x) for x in tops]
+
+		result = \
+					model.decode(data, tops, phone_intervals=True, 
+													edit_ops=True, hmm_states=True, plus=True)
+
+		if isinstance(result, str):
+			print('WARNING: Decoding on 0 files.')
+			return result
+
+
+		phone_intervals, edit_ops, hmm_states, plus = result
+
+
+		pred_frame_labels = np.array(plus)
+
+		# Get the PLU labels from the textgrid
+		true_frame_labels = np.array(read_tg(textgrid_path, len(pred_frame_labels)))
+
+		assert(len(pred_frame_labels)==len(true_frame_labels))
+
+		return fea_path, pred_frame_labels, true_frame_labels, edit_ops, phone_intervals
+
 
 
 def edit_op_analysis(edit_ops_all, n_true_types, output_file):
+
+	if len(edit_ops_all) == 0:
+		with open(output_file, 'w') as f1:
+			f1.write('No data to evaluate on.')
+		return
 
 	edit_op_counts = dict()
 	for utt in edit_ops_all:
@@ -302,7 +292,7 @@ def edit_op_analysis(edit_ops_all, n_true_types, output_file):
 				sum([ x[0] for x in relevant_ibs ]) + \
 				sum([ x[0] for x in relevant_its ])
 
-			f1.write('\n\nMost common operations for phone "{}":\n'.format(int_to_phone[i]))
+			f1.write('\n\nMost common operations for phone "{}":\n'.format(TIMIT_phones.int_to_phone[i]))
 			for v,k in relevant_subs[:10]:
 				f1.write('    SUB {} ({}%)\n'.format(k[2], (v/relevant_sum)*100))
 			for v,k in relevant_ibs[:10]:
@@ -312,6 +302,11 @@ def edit_op_analysis(edit_ops_all, n_true_types, output_file):
 
 
 def correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, output_file):
+
+	if len(true_frame_labels_all) == 0:
+		with open(output_file, 'w') as f1:
+			f1.write('No data to evaluate on.')
+		return
 
 	n_true_types = max([ max(x) for x in true_frame_labels_all ]) + 1
 	n_pred_types = max([ max(x) for x in pred_frame_labels_all ]) + 1
@@ -329,7 +324,7 @@ def correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, output
 			corresponds_to_pairs = [ (x,i) for i, x in enumerate(corresponds_to) if x > 0 ]
 			corresponds_to_pairs.sort(reverse=True)
 
-			f1.write('Phone "{}" (n={}) corresponds to discovered PLU labels...\n'.format(int_to_phone[true_type], total))
+			f1.write('Phone "{}" (n={}) corresponds to discovered PLU labels...\n'.format(TIMIT_phones.int_to_phone[true_type], total))
 			[ f1.write('    {}, n={}, {}%\n'.format(pred_type, count, (count/total)*100)) for count, pred_type in corresponds_to_pairs[:10] ]
 			f1.write('\n')
 
@@ -342,7 +337,7 @@ def correspondance_analysis(true_frame_labels_all, pred_frame_labels_all, output
 			corresponds_to_pairs.sort(reverse=True)
 
 			f1.write('Discovered PLU {} (n={}) corresponds to phones...\n'.format(pred_type, total))
-			[ f1.write('    "{}", n={}, {}%\n'.format(int_to_phone[true_type], count, (count/total)*100)) for count, true_type in corresponds_to_pairs[:10] ]
+			[ f1.write('    "{}", n={}, {}%\n'.format(TIMIT_phones.int_to_phone[true_type], count, (count/total)*100)) for count, true_type in corresponds_to_pairs[:10] ]
 			f1.write('\n')
 
 
@@ -379,7 +374,7 @@ def read_tg(path, n_frames):
 		tg_frame_labels[frame_index] = interval_label
 		time += frame_length
 
-	tg_frame_labels = [phone_to_int[x.lower()] for x in tg_frame_labels]
+	tg_frame_labels = [TIMIT_phones.phone_to_int[x.lower()] for x in tg_frame_labels]
 
 	return tg_frame_labels
 
@@ -389,11 +384,12 @@ def read_tg(path, n_frames):
 
 
 
-if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
+# if __name__ == '__main__':
+# 	parser = argparse.ArgumentParser()
 
-	parser.add_argument("model_path",  help="path to directory containing pickled model files")
-	parser.add_argument("audio_dir",  help="path to audio directory to evaluate on")
-	args = parser.parse_args()
+# 	parser.add_argument("model_path",  help="path to directory containing pickled model files")
+# 	parser.add_argument("audio_dir",  help="path to audio directory to evaluate on")
+# 	args = parser.parse_args()
 	
-	evaluate_model(args.model_path, args.audio_dir)
+	# evaluate_model(args.model_path, args.audio_dir)
+

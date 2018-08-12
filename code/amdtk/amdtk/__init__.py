@@ -8,5 +8,6 @@ features to automatically discover phone-like units.
 from .io import *
 from .densities import *
 from .models import *
+from .shared import *
 from .training import *
 from .evals import *
